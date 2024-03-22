@@ -1,0 +1,31 @@
+
+
+for _ in _ :
+    .
+    .
+    .
+
+
+while exp :
+    .
+    .
+    .
+
+ if exp:
+    .
+
+ if exp:
+    .
+    .
+ else:
+    .
+    .
+
+return exp
+
+
+x = U(y)
+c,t = cx(g,o)
+
+# continue, break
+

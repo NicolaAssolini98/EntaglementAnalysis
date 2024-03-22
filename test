@@ -1,0 +1,31 @@
+
+    for _ in _:
+        tgt = h(tgt)
+        tgt = h(tgt)
+
+    if e:
+        c2, tgt = cx(c2, tgt)
+    else:
+        tgt = tdg(tgt)
+
+    while exp:
+        c1, tgt = cx(c1, tgt)
+        tgt = t(tgt)
+        c2, tgt = cx(c2, tgt)
+        tgt = tdg(tgt)
+
+    tgt = t(tgt)
+    c1, c2 = cx(c1, c2)
+    tgt = h(tgt)
+    c1 = t(c1)
+    c2 = tdg(c2)
+    c1, c2 = cx(c1, c2)
+
+
+@guppy(module)
+# Teleports the state in `src` to `tgt`
+def toffoli(c1: qubit, c2: qubit, tgt: qubit) -> tuple[qubit, qubit, qubit]:
+    c1, tgt = cx(c1, tgt)
+    c2 = t(c2)
+    # return c1, c2, tgt
+
