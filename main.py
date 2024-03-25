@@ -15,12 +15,12 @@ def print_cfg(cfg):
     plt.show()
 
 
-file_path = 'test'
+file_path = 'txt_files/test'
 tag = '@guppy'
 groups = obtain_function(file_path)
-for group in groups:
-    print('----')
-    print(group)
+# for group in groups:
+#     print('----')
+#     print(group)
 
 g = build_cfg(groups[0])
 print(type(g))

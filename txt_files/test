@@ -24,8 +24,15 @@
 
 @guppy(module)
 # Teleports the state in `src` to `tgt`
-def toffoli(c1: qubit, c2: qubit, tgt: qubit) -> tuple[qubit, qubit, qubit]:
-    c1, tgt = cx(c1, tgt)
-    c2 = t(c2)
-    # return c1, c2, tgt
+def toffoli() -> tuple[qubit, qubit, qubit]:
+    while e:
+        c2, tgt = cx(c2, tgt)
+        c2, tgt = cx(c2, tgt)
+        while ex:
+            x =  x(c2)
+        #else:
+         #   a = h(a)
+          #  a = h(a)
+        #c1 = t(c1)
 
+    return c1
