@@ -27,5 +27,6 @@ return exp
 x = U(y)
 c,t = cx(g,o)
 
+discard(x,y)
 # continue, break
 

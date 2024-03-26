@@ -2,8 +2,10 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 
-from cfg_build import cfg_build, build_cfg
+from cfg_build import build_cfg, clean_empty_line
 from parser import obtain_function
+from analysis import consumption_analysis, entaglement_analysis
+
 
 def print_cfg(cfg):
     pos = nx.spring_layout(cfg)
@@ -22,6 +24,13 @@ groups = obtain_function(file_path)
 #     print('----')
 #     print(group)
 
-g = build_cfg(groups[0])
-print(type(g))
+
+g = build_cfg(clean_empty_line(groups[0]))
+# print(type(g))
 print_cfg(g)
+# res1, res2 = consumption_analysis(g)
+
+# print(res1)
+# print(res2)
+
+print(entaglement_analysis(g))

@@ -3,9 +3,12 @@ from enum import Enum
 
 import networkx as nx
 
-pattern = r'^\s*([\w\s,]+)\s*=\s*([\w\s,]+\([\w\s,]+\))\s*$'
+pattern_gate_app = r'^\s*([\w\s,]+)\s*=\s*([\w\s,]+\([\w\s,]+\))\s*$'
+pattern_init = r'^(\s*\w+\s*(\s*,\s*\w)*)\s*=\s*qubit\(\s*\)(\s*,\s*qubit\(\s*\))*'
+pattern_measure = r'\w'
 node_count = 1
 exit_node = 'Exit'
+
 
 class EdgeLabel:
     def __init__(self, type_label, value):
@@ -27,13 +30,19 @@ class NodeType(Enum):
     Zero = 5
     Skip = 6
     Ret = 7
+    Init = 8
+    Discard = 9
 
 
-def not_only_space(s):
-    for char in s:
-        if not char.isspace():
-            return True
-    return False
+def clean_empty_line(lines):
+    res = []
+    for line in lines:
+        for char in line:
+            if not char.isspace():
+                res.append(line)
+                break
+
+    return res
 
 
 def count_tab(string):
@@ -64,25 +73,38 @@ def extract_variables(declaration):
     return matches
 
 
-def cfg_build(fun):
-    for line in fun:
-        if not not_only_space(line) or 'def' in line:
-            continue
+def extract_function_name(string):
+    pattern1 = r'^(\w+)(?=\()'
+    match = re.match(pattern1, string)
 
-        graph = nx.DiGraph()
-        start_node = 'Start'
-        graph.add_node(start_node)
-        print(count_tab(line))
-        if re.match(pattern, line):
-            print(line)
-        elif 'for' in line:
-            print('for loop')
-        elif 'while' in line:
-            print('while loop')
-        elif 'if' in line:
-            print('if branch')
-        elif 'else' in line:
-            print('else branch')
+    return match.group(1)
+
+
+def extract_function_args(string):
+    pattern2 = r'\((.*?)\)'
+    match = re.search(pattern2, string)
+    if match:
+        variables = match.group(1).split(',')
+        return [var.strip() for var in variables]
+    else:
+        return []
+
+
+def extract_sub_graph(cfg, lines, if_branch_size, if_node, end_node, tabs):
+    if_branch_lines = []
+    while count_tab(lines[if_branch_size]) > tabs or if_branch_size >= len(lines):
+        if_branch_lines.append(lines[if_branch_size])
+        if_branch_size += 1
+    if_cfg = nx.DiGraph()
+    if_cfg.add_node(if_node)
+    if_cfg = build_cfg(if_branch_lines, if_cfg, if_node)
+    if_end_nodes = [node for node in if_cfg.nodes if if_cfg.out_degree(node) == 0]
+    cfg = nx.compose(cfg, if_cfg)
+    for if_end_node in if_end_nodes:
+        if if_end_node != exit_node:
+            cfg = nx.relabel_nodes(cfg, {if_end_node: end_node})
+
+    return cfg, if_branch_size
 
 
 def build_cfg(lines, cfg=None, prev_node=None):
@@ -91,7 +113,7 @@ def build_cfg(lines, cfg=None, prev_node=None):
         return cfg
     l = lines[0]
 
-    if not not_only_space(lines[0]) or lines[0].replace(" ", "").startswith('#'):
+    if lines[0].replace(" ", "").startswith('#'):
         return build_cfg(lines[1:], cfg, prev_node)
 
     if 'def' in lines[0]:
@@ -106,69 +128,54 @@ def build_cfg(lines, cfg=None, prev_node=None):
 
         return build_cfg(lines[1:], graph, p_node)
 
-    if re.match(pattern, lines[0]):
+    if re.match(pattern_gate_app, lines[0]):
         p_node = new_node()
         cfg.add_node(p_node)
-        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.GateCall, lines[0].replace(" ", "").split('=')))
+        part = lines[0].replace(" ", "").split('=')
+
+        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.GateCall, [part[0].split(","), extract_function_name(part[1]), extract_function_args(part[1])]))
+
+        return build_cfg(lines[1:], cfg, p_node)
+
+    if re.match(pattern_init, lines[0]):
+        p_node = new_node()
+        cfg.add_node(p_node)
+        part = lines[0].replace(" ", "").split('=')
+
+        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.Init, part[0].split(",")))
 
         return build_cfg(lines[1:], cfg, p_node)
 
     if 'return' in lines[0]:
-        cfg.add_edge(prev_node, exit_node, label=EdgeLabel(NodeType.Ret, lines[0].replace(" ", "")[6:].split(',')))
+        cfg.add_edge(prev_node, exit_node, label=EdgeLabel(NodeType.Ret, lines[0].replace(" ", "").replace("\n", "")[6:].split(',')))
         return cfg
 
+    if 'discard' in lines[0]:
+        p_node = new_node()
+        cfg.add_node(p_node)
+        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.Discard, lines[0].replace(" ", "").replace("\n", "")[8:-1].split(',')))
+        return build_cfg(lines[1:], cfg, p_node)
+
     if 'if' in lines[0]:
-        # if end_node is None:
-        #     end_node = new_node()
-        #     cfg.add_node(end_node)
         tabs = count_tab(lines[0])
 
         if_node = new_node()
         cfg.add_node(if_node)
-        cfg.add_edge(prev_node, if_node, label=EdgeLabel(NodeType.NonZero, lines[0].replace(" ", "")[2:-1]))
-
-        if_branch_lines = []
-        if_branch_size = 1
-        while count_tab(lines[if_branch_size]) > tabs:
-            if_branch_lines.append(lines[if_branch_size])
-            if_branch_size += 1
-
-        if_cfg = nx.DiGraph()
-        if_cfg.add_node(if_node)
-        if_cfg = build_cfg(if_branch_lines, if_cfg, if_node)
-        if_end_nodes = [node for node in if_cfg.nodes if if_cfg.out_degree(node) == 0]
-        # end_node = end_nodes[0]
-        # if len(end_nodes) > 1:
-        cfg = nx.compose(cfg, if_cfg)
+        cfg.add_edge(prev_node, if_node, label=EdgeLabel(NodeType.NonZero, lines[0].replace(" ", "").replace("\n", "")[2:-1]))
         end_node = new_node()
         cfg.add_node(end_node)
-        for if_end_node in if_end_nodes:
-            if if_end_node != exit_node:
-                cfg = nx.relabel_nodes(cfg, {if_end_node: end_node})
 
-            # cfg.add_edge(if_end_node, end_node, label=EdgeLabel(NodeType.Skip, ""))
+        cfg, if_branch_size = extract_sub_graph(cfg, lines, 1, if_node, end_node, tabs)
 
         else_branch_size = if_branch_size + 1
         if 'else' in lines[if_branch_size]:
             else_node = new_node()
             cfg.add_node(else_node)
-            cfg.add_edge(prev_node, else_node, label=EdgeLabel(NodeType.Zero, lines[0].replace(" ", "")[2:-1]))
-            else_branch_lines = []
-            while count_tab(lines[else_branch_size]) > tabs:
-                else_branch_lines.append(lines[else_branch_size])
-                else_branch_size += 1
+            cfg.add_edge(prev_node, else_node, label=EdgeLabel(NodeType.Zero, lines[0].replace(" ", "").replace("\n", "")[2:-1]))
 
-            else_cfg = nx.DiGraph()
-            else_cfg.add_node(else_node)
-            else_cfg = build_cfg(else_branch_lines, else_cfg, else_node)
-            else_end_nodes = [node for node in else_cfg.nodes if else_cfg.out_degree(node) == 0]
-            cfg = nx.compose(cfg, else_cfg)
-            for else_end_node in else_end_nodes:
-                if else_end_node != exit_node:
-                    cfg = nx.relabel_nodes(cfg, {else_end_node: end_node})
-                # cfg.add_edge(else_end_node, end_node, label=EdgeLabel(NodeType.Skip, ""))
+            cfg, else_branch_size = extract_sub_graph(cfg, lines, else_branch_size, else_node, end_node, tabs)
         else:
-            cfg.add_edge(prev_node, end_node, label=EdgeLabel(NodeType.Zero, lines[0].replace(" ", "")[2:-1]))
+            cfg.add_edge(prev_node, end_node, label=EdgeLabel(NodeType.Zero, lines[0].replace(" ", "").replace("\n", "")[2:-1]))
 
         return build_cfg(lines[else_branch_size:], cfg, end_node)
 
@@ -180,28 +187,28 @@ def build_cfg(lines, cfg=None, prev_node=None):
 
         while_node = new_node()
         cfg.add_node(while_node)
-        cfg.add_edge(prev_node, while_node, label=EdgeLabel(NodeType.NonZero, lines[0].replace(" ", "")[5:-1]))
+        cfg.add_edge(prev_node, while_node, label=EdgeLabel(NodeType.NonZero, lines[0].replace(" ", "").replace("\n", "")[5:-1]))
 
-        while_branch_lines = []
-        while_branch_size = 1
-        while count_tab(lines[while_branch_size]) > tabs:
-            while_branch_lines.append(lines[while_branch_size])
-            while_branch_size += 1
+        cfg, while_branch_size = extract_sub_graph(cfg, lines, 1, while_node, prev_node, tabs)
 
-        w_cfg = nx.DiGraph()
-        w_cfg.add_node(while_node)
-        w_cfg = build_cfg(while_branch_lines, w_cfg, while_node)
-        w_end_nodes = [node for node in w_cfg.nodes if w_cfg.out_degree(node) == 0]
-        cfg = nx.compose(cfg, w_cfg)
-        for w_end_node in w_end_nodes:
-            if w_end_node != exit_node:
-                cfg = nx.relabel_nodes(cfg, {w_end_node: prev_node})
+        # while count_tab(lines[while_branch_size]) > tabs:
+        #     while_branch_lines.append(lines[while_branch_size])
+        #     while_branch_size += 1
+        #
+        # w_cfg = nx.DiGraph()
+        # w_cfg.add_node(while_node)
+        # w_cfg = build_cfg(while_branch_lines, w_cfg, while_node)
+        # w_end_nodes = [node for node in w_cfg.nodes if w_cfg.out_degree(node) == 0]
+        # cfg = nx.compose(cfg, w_cfg)
+        # for w_end_node in w_end_nodes:
+        #     if w_end_node != exit_node:
+        #         cfg = nx.relabel_nodes(cfg, {w_end_node: prev_node})
 
-            # cfg.add_edge(if_end_node, end_node, label=EdgeLabel(NodeType.Skip, ""))
+        # cfg.add_edge(if_end_node, end_node, label=EdgeLabel(NodeType.Skip, ""))
 
         end_node = new_node()
         cfg.add_node(end_node)
-        cfg.add_edge(prev_node, end_node, label=EdgeLabel(NodeType.Zero, lines[0].replace(" ", "")[5:-1]))
+        cfg.add_edge(prev_node, end_node, label=EdgeLabel(NodeType.Zero, lines[0].replace(" ", "").replace("\n", "")[5:-1]))
 
         return build_cfg(lines[while_branch_size:], cfg, end_node)
 

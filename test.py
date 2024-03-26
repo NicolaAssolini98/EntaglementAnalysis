@@ -1,40 +1,24 @@
-import networkx as nx
-import matplotlib.pyplot as plt
+# Lista di set di esempio
+list_of_sets = [{1, 2}, {3, 4}, {5, 6, 7}]
 
-import networkx as nx
-import matplotlib.pyplot as plt
+# Valori specifici da cercare
+var1 = 5
+var2 = 7
 
-# Creazione del primo grafo
-G1 = nx.DiGraph()
-node = '10'
-# G1.add_edges_from([(1, 2), (2, 3), (3, 4)])
-G1.add_node(4)
-G1.add_node(4)
-G1.add_node(4)
-G1.add_node(4)
-G1.add_node(4)
-G1.add_node(4)
-G1.add_node(node)
-G1.add_node(node)
-G1.add_edge(node, 4)
-
-print(node == 4)
-print(node == '10')
-# # Creazione del secondo grafo
-# G2 = nx.DiGraph()
-# G2.add_edges_from([(5, 6), (6, 7), (7, 8)])
-# G2.add_node(node)
-# G2.add_edge(node, 8)
-#
-# # Unione dei due grafi
-# G = nx.compose(G1, G2)
-# # G = nx.relabel_nodes(G, {node: 50})
-#
-print(G1.nodes)
-# print(G2.out_degree(node))
-# print(G.out_degree(node))
+# Cerca i set che contengono i valori specifici
+set_v1 = [s for s in list_of_sets if var1 in s]
+set_v2 = [s for s in list_of_sets if var2 in s]
 
 
-# Disegno del grafo unito
-nx.draw(G1, with_labels=True, node_color='lightblue', node_size=1000, font_size=12, font_weight='bold')
-plt.show()
+
+
+if set_v1 != set_v2:
+    exit('Partition ill-formed')
+
+
+list_of_sets.remove(set_v1[0])
+set_v1[0].discard(var2)
+list_of_sets.append(set_v1[0])
+list_of_sets.append({var2})
+
+print(list_of_sets)

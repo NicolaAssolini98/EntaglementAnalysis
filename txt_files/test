@@ -22,17 +22,26 @@
     c1, c2 = cx(c1, c2)
 
 
-@guppy(module)
-# Teleports the state in `src` to `tgt`
-def toffoli() -> tuple[qubit, qubit, qubit]:
-    while e:
-        c2, tgt = cx(c2, tgt)
-        c2, tgt = cx(c2, tgt)
-        while ex:
-            x =  x(c2)
-        #else:
-         #   a = h(a)
-          #  a = h(a)
-        #c1 = t(c1)
 
-    return c1
+    y,q = cx(y,q)
+
+    x = h(x)
+    q,x = cx(q,x)
+
+    x,q = cx(x,q)
+
+
+@guppy(module)
+# Teleports the stxte in `src` to `tgt`
+def toffoli() -> tuple[qubit, qubit, qubit]:
+
+    x,y,z = qubit(), qubit(), qubit()
+
+    x = h(x)
+    y = h(y)
+    y = x(y)
+    #q = x(z)
+
+    x,y = cz(x,y)
+
+    return x
