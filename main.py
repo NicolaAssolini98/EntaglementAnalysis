@@ -6,6 +6,20 @@ from cfg_build import build_cfg, clean_empty_line, print_cfg
 from parser import obtain_function
 from analysis import consumption_analysis, entaglement_analysis
 
+"""
+Assunzioni:
+non posso scrivere:
+    if measure(bla)
+ma devo usare:
+    r = measure(bla)
+    if r
+    
+devo sempre assegnare quando uso funzioni quantum, a parte discard
+tutte le variabili classiche devono essere segnate come '_'
+"""
+
+
+# TODO aggiungi rz, rx
 
 
 
@@ -24,5 +38,5 @@ g = build_cfg(clean_empty_line(groups[0]))
 
 # print(res1)
 # print(res2)
-
-print(entaglement_analysis(g))
+consider_discard = True
+print(entaglement_analysis(g, consider_discard))

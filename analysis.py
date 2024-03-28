@@ -65,7 +65,8 @@ class Pair:
         self.store[key] = value
         s = set()
         s.add(key)
-        self.sets.append(s)
+        if s not in self.sets:
+            self.sets.append(s)
 
     def update_value(self, key, value):
         self.store[key] = value
@@ -104,23 +105,52 @@ class Pair:
                 self.sets.remove(set_v2)
 
     def remove_from(self, var1, var2):
+        """
+        Remove var2 from the set of var2
+        """
         set_v1 = self.get_set(var1)
         set_v2 = self.get_set(var2)
 
         if len(set_v1) > 0:
-            if set_v1 != set_v2:
-                exit('Remove from (%s,%s) Partition ill-formed' % (var1, var2))
-
-            self.sets.remove(set_v1)
-            set_v1.discard(var2)
-            self.sets.append(set_v1)
-            self.sets.append({var2})
+            if set_v1 == set_v2:
+                self.sets.remove(set_v1)
+                set_v1.discard(var2)
+                if len(set_v1) > 0:
+                    self.sets.append(set_v1)
+                self.sets.append({var2})
 
     def is_disjoint(self, var1, var2):
         set_v1 = self.get_set(var1)
         set_v2 = self.get_set(var2)
 
         return not set_v1 == set_v2
+
+    def disentagled_on_value(self, val, var1, var2):
+        self.update_value(var2, Value.Z)
+        self.remove_from(var1, var2)
+        ent_set = self.get_set(var1)
+        if len(ent_set) == 1:
+            self.update_value(var1, val)
+
+    def measure(self, var):
+        if (self.get_store_val(var) == Value.EX or self.get_store_val(var) == Value.EY
+                or self.get_store_val(var) == Value.ES):
+            ent_with_var = copy.deepcopy(self.get_set(var))
+            for vv in ent_with_var:
+                if vv != var:
+                    # in this case al variables collapse to Value.Z
+                    if (self.get_store_val(vv) == Value.EX or self.get_store_val(vv) == Value.EY
+                            or self.get_store_val(vv) == Value.ES):
+                        self.update_value(vv, Value.Z)
+                        self.remove_from(var, vv)
+
+        self.remove_from(var, var)
+        self.update_value(var, Value.Z)
+
+    def set_entagled_on_value(self, val, var1, var2):
+        self.update_value(var1, val)
+        self.update_value(var2, val)
+        self.join(var1, var2)
 
     def __str__(self):
         return "store: %s\n sets:%s\n" % (str(self.store), str(self.sets))
@@ -170,7 +200,7 @@ def consumption_analysis(cfg):
                 if inst_type == NodeType.Args or inst_type == NodeType.Init:
                     # ['arg1', 'arg2']
                     added_vars.update(instr)
-                elif inst_type == NodeType.Ret or inst_type == NodeType.Discard:
+                elif inst_type == NodeType.Ret or inst_type == NodeType.Discard or inst_type == NodeType.Measure:
                     # ['arg1', 'arg2']
                     removed_vars.update(instr)
                 elif inst_type == NodeType.GateCall:
@@ -199,13 +229,9 @@ def consumption_analysis(cfg):
 
     # TODO test overwriting
     for edge in cfg.edges:
-        # print(edge)
         label = cfg[edge[0]][edge[1]]["label"]
         inst_type = label.type
         instr = label.value
-        # print(label)
-        # if inst_type == NodeType.Args or inst_type == NodeType.Init:
-        #     # ['arg1', 'arg2']
         if inst_type == NodeType.Ret or inst_type == NodeType.Discard:
             # ['arg1', 'arg2']
             if not (set(instr) <= avs_vars[edge[0]]):
@@ -260,26 +286,18 @@ def compute_one_qubit_gate(fun, val1):
             return Value.D
         else:
             return Value.Top
+    elif fun == 'rx':
+        if val1 == Value.X or val1 == Value.Bot:
+            return val1
+        else:
+            return Value.Top
+    elif fun == 'rz':
+        if val1 == Value.Z or val1 == Value.Bot:
+            return val1
+        else:
+            return Value.Top
 
     return Value.Top
-
-
-def disentagled_on_value(abs_dom, val, var1, var2):
-    abs_dom.update_value(var2, Value.Z)
-    abs_dom.remove_from(var1, var2)
-    ent_set = abs_dom.get_set(var1)
-    if len(ent_set) == 1:
-        abs_dom.update_value(var1, val)
-
-    return abs_dom
-
-
-def set_entagled_on_value(abs_dom, val, var1, var2):
-    abs_dom.update_value(var1, val)
-    abs_dom.update_value(var2, val)
-    abs_dom.join(var1, var2)
-
-    return abs_dom
 
 
 def abs_semantics(fun, abs_dom, in_vars):
@@ -295,23 +313,25 @@ def abs_semantics(fun, abs_dom, in_vars):
         v_t = abs_dom.get_store_val(targ)
         if (v_c == Value.Z or v_t == Value.X or v_c == Value.Bot or v_t == Value.Bot) and abs_dom.is_disjoint(ctrl,
                                                                                                               targ):
-            return abs_dom
-        if (v_c == Value.X or v_c == Value.EX) and v_t == Value.Z and abs_dom.is_disjoint(ctrl, targ):
-            return set_entagled_on_value(abs_dom, Value.EX, ctrl, targ)
-        if (v_c == Value.Y or v_c == Value.EY) and v_t == Value.Z and abs_dom.is_disjoint(ctrl, targ):
-            return set_entagled_on_value(abs_dom, Value.EY, ctrl, targ)
-        if (v_c == Value.S or v_c == Value.ES) and v_t == Value.Z and abs_dom.is_disjoint(ctrl, targ):
-            return set_entagled_on_value(abs_dom, Value.ES, ctrl, targ)
-        if v_c == Value.EX and v_t == v_c and not abs_dom.is_disjoint(ctrl, targ):
-            return disentagled_on_value(abs_dom, Value.X, ctrl, targ)
-        if v_c == Value.EY and v_t == v_c and not abs_dom.is_disjoint(ctrl, targ):
-            return disentagled_on_value(abs_dom, Value.Y, ctrl, targ)
-        if v_c == Value.ES and v_t == v_c and not abs_dom.is_disjoint(ctrl, targ):
-            return disentagled_on_value(abs_dom, Value.S, ctrl, targ)
-        if v_t == Value.Top and not abs_dom.is_disjoint(ctrl, targ):
-            return abs_dom
+            pass
+        elif (v_c == Value.X or v_c == Value.EX) and v_t == Value.Z and abs_dom.is_disjoint(ctrl, targ):
+            abs_dom.set_entagled_on_value(Value.EX, ctrl, targ)
+        elif (v_c == Value.Y or v_c == Value.EY) and v_t == Value.Z and abs_dom.is_disjoint(ctrl, targ):
+            abs_dom.set_entagled_on_value(Value.EY, ctrl, targ)
+        elif (v_c == Value.S or v_c == Value.ES) and v_t == Value.Z and abs_dom.is_disjoint(ctrl, targ):
+            abs_dom.set_entagled_on_value(Value.ES, ctrl, targ)
+        elif v_c == Value.EX and v_t == v_c and not abs_dom.is_disjoint(ctrl, targ):
+            abs_dom.disentagled_on_value(Value.X, ctrl, targ)
+        elif v_c == Value.EY and v_t == v_c and not abs_dom.is_disjoint(ctrl, targ):
+            abs_dom.disentagled_on_value(Value.Y, ctrl, targ)
+        elif v_c == Value.ES and v_t == v_c and not abs_dom.is_disjoint(ctrl, targ):
+            abs_dom.disentagled_on_value(Value.S, ctrl, targ)
+        elif v_t == Value.Top and not abs_dom.is_disjoint(ctrl, targ):
+            pass
+        else:
+            abs_dom.set_entagled_on_value(Value.Top, ctrl, targ)
 
-        return set_entagled_on_value(abs_dom, Value.Top, ctrl, targ)
+        return abs_dom
 
     if fun == 'cz':
         abs_dom = abs_semantics('h', abs_dom, in_vars[1:])
@@ -419,13 +439,15 @@ def join_2_pairs(pair1, pair2):
     return join_pair
 
 
-def entaglement_analysis(cfg):
+def entaglement_analysis(cfg, consider_discard=False):
     pairs = {node: Pair() for node in cfg.nodes()}
 
     fixpoint = False
     while not fixpoint:
         old_pairs = copy_sets(pairs)
         for node in cfg.nodes():
+            # print('<--')
+            # print(node)
             temps_pairs = []
             predecessors = list(cfg.predecessors(node))
             for prec in predecessors:
@@ -437,23 +459,35 @@ def entaglement_analysis(cfg):
                     # ['arg1', 'arg2']
                     for v in instr:
                         temp.add(v, Value.Z)
+                elif inst_type == NodeType.Measure:
+                    # ['arg1', 'arg2']
+                    for v in instr:
+                        temp.measure(v)
                 elif inst_type == NodeType.GateCall:
                     # [['out1', 'out2'], 'cx', ['in1', 'in2']]
                     temp = abs_semantics(instr[1], temp, instr[2])
                     for i in range(len(instr[2])):
                         temp.rename(instr[2][i], instr[0][i])
+                elif inst_type == NodeType.Discard:
+                    # ['arg1', 'arg2']
+                    # TODO serve o non serve analizzarla???
+                    if consider_discard:
+                        for v in instr:
+                            temp.update_value(v, Value.Bot)
+                            temp.remove_from(v, v)
                 temps_pairs.append(temp)
 
             if len(temps_pairs) > 0:
                 join = reduce(lambda x, y: join_2_pairs(x, y), temps_pairs)
             else:
                 join = Pair()
-            # if node == '3':
-            #     print('@@@@')
+            # if node >= '4':
             #     print(predecessors)
             #     print(temps_pairs)
             #     print(join)
-            #     print('@@@@')
+            # print('-->')
+            # print()
+
             pairs[node] = join
         print(str(pairs) + '\n-----')
 
@@ -461,35 +495,3 @@ def entaglement_analysis(cfg):
 
     return pairs
 
-    #     for prec in predecessors:
-    #         added_vars = set()
-    #         removed_vars = set()
-
-    #         if inst_type == NodeType.Args or inst_type == NodeType.Init:
-    #             # ['arg1', 'arg2']
-    #             added_vars.update(instr)
-    #         elif inst_type == NodeType.Ret or inst_type == NodeType.Discard:
-    #             # ['arg1', 'arg2']
-    #             removed_vars.update(instr)
-    #         elif inst_type == NodeType.GateCall:
-    #             # [['out1', 'out2'], 'cx', ['in1', 'in2']]
-    #             added_vars.update(instr[0])
-    #             removed_vars.update(instr[2])
-    #         temp_avs = old_avls[prec] - removed_vars
-    #         temp_ovs = old_avls[prec] - removed_vars
-    #         temp_avs.update(added_vars)
-    #         temp_ovs.update(added_vars)
-    #         temps_avs.append(temp_avs)
-    #         temps_ovs.append(temp_avs)
-    #
-    #     if len(temps_avs) > 0:
-    #         intersection = reduce(lambda x, y: x & y, temps_avs)
-    #     else:
-    #         intersection = set()
-    #     if len(temps_ovs) > 0:
-    #         union = reduce(lambda x, y: x | y, temps_avs)
-    #     else:
-    #         union = set()
-    #     avs_vars[node] = intersection
-    #     ovs_vars[node] = union
-    #

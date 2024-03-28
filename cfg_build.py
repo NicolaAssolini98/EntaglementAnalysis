@@ -56,6 +56,11 @@ def clean_empty_line(lines):
     return res
 
 
+def clean_var_names(var_names):
+    pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
+    return [string for string in var_names if bool(re.match(pattern, string)) and string != '_']
+
+
 def count_tab(string):
     count = 0
     for char in string:
@@ -134,46 +139,41 @@ def build_cfg(lines, cfg=None, prev_node=None):
 
         return build_cfg(lines[1:], cfg, p_node)
 
-
     if 'def' in lines[0]:
+        # def fun(x: qubit, v: qubit , _, )...:
         graph = nx.DiGraph()
         start_node = 'Start'
         reset_count()
         graph.add_node(start_node)
         graph.add_node(exit_node)
         args = extract_variables(lines[0])
+        # ['x','y',]
         p_node = new_node()
         graph.add_edge(start_node, p_node, label=EdgeLabel(NodeType.Args, args))
 
         return build_cfg(lines[1:], graph, p_node)
 
-    if re.match(pattern_gate_app, lines[0]):
-        p_node = new_node()
-        cfg.add_node(p_node)
-        part = lines[0].replace(" ", "").split('=')
-
-        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.GateCall, [part[0].split(","), extract_function_name(part[1]), extract_function_args(part[1])]))
-
-        return build_cfg(lines[1:], cfg, p_node)
-
-    if re.match(pattern_init, lines[0]):
-        p_node = new_node()
-        cfg.add_node(p_node)
-        part = lines[0].replace(" ", "").split('=')
-
-        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.Init, part[0].split(",")))
-
-        return build_cfg(lines[1:], cfg, p_node)
-
     if 'return' in lines[0]:
-        cfg.add_edge(prev_node, exit_node, label=EdgeLabel(NodeType.Ret, lines[0].replace(" ", "").replace("\n", "")[6:].split(',')))
-        #cfg.add_edge(prev_node, exit_node, label=EdgeLabel(NodeType.GateCall, [['o'], 'x', ['x']]))
+        # return x,y,_,...
+        ret_vars = clean_var_names(lines[0].replace(" ", "").replace("\n", "")[6:].split(','))
+        cfg.add_edge(prev_node, exit_node, label=EdgeLabel(NodeType.Ret, ret_vars))
+
         return cfg
 
     if 'discard' in lines[0]:
+        # discard(x,y,...)
         p_node = new_node()
         cfg.add_node(p_node)
         cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.Discard, lines[0].replace(" ", "").replace("\n", "")[8:-1].split(',')))
+        return build_cfg(lines[1:], cfg, p_node)
+
+    if 'measure' in lines[0]:
+        # _ = measure(x,y,...)
+        p_node = new_node()
+        cfg.add_node(p_node)
+        part = lines[0].replace(" ", "").replace("\n","").split('=')
+        m_vars = clean_var_names(part[1][8:-1].split(','))
+        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.Measure, m_vars))
         return build_cfg(lines[1:], cfg, p_node)
 
     if 'if' in lines[0]:
@@ -211,21 +211,6 @@ def build_cfg(lines, cfg=None, prev_node=None):
 
         cfg, while_branch_size = extract_sub_graph(cfg, lines, 1, while_node, prev_node, tabs)
 
-        # while count_tab(lines[while_branch_size]) > tabs:
-        #     while_branch_lines.append(lines[while_branch_size])
-        #     while_branch_size += 1
-        #
-        # w_cfg = nx.DiGraph()
-        # w_cfg.add_node(while_node)
-        # w_cfg = build_cfg(while_branch_lines, w_cfg, while_node)
-        # w_end_nodes = [node for node in w_cfg.nodes if w_cfg.out_degree(node) == 0]
-        # cfg = nx.compose(cfg, w_cfg)
-        # for w_end_node in w_end_nodes:
-        #     if w_end_node != exit_node:
-        #         cfg = nx.relabel_nodes(cfg, {w_end_node: prev_node})
-
-        # cfg.add_edge(if_end_node, end_node, label=EdgeLabel(NodeType.Skip, ""))
-
         end_node = new_node()
         cfg.add_node(end_node)
         cfg.add_edge(prev_node, end_node, label=EdgeLabel(NodeType.Zero, lines[0].replace(" ", "").replace("\n", "")[5:-1]))
@@ -233,5 +218,31 @@ def build_cfg(lines, cfg=None, prev_node=None):
         return build_cfg(lines[while_branch_size:], cfg, end_node)
 
         # TODO for loop
+
+    if re.match(pattern_gate_app, lines[0]):
+        # x,y = gate(x,y)
+        p_node = new_node()
+        cfg.add_node(p_node)
+        part = lines[0].replace(" ", "").split('=')
+
+        out_vars = clean_var_names(part[0].split(","))
+        fun_name = extract_function_name(part[1])
+        in_vars = clean_var_names(extract_function_args(part[1]))
+
+        print(in_vars)
+
+        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.GateCall, [out_vars, fun_name, in_vars]))
+
+        return build_cfg(lines[1:], cfg, p_node)
+
+    if re.match(pattern_init, lines[0]):
+        # x,y,... = qubit(),qubit(),...
+        p_node = new_node()
+        cfg.add_node(p_node)
+        part = lines[0].replace(" ", "").split('=')
+
+        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.Init, part[0].split(",")))
+
+        return build_cfg(lines[1:], cfg, p_node)
 
     exit('error parsing: ' + str(lines))
