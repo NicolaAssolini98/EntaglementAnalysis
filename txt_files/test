@@ -35,13 +35,12 @@
 # Teleports the stxte in `src` to `tgt`
 def toffoli() -> tuple[qubit, qubit, qubit]:
 
+# x-1, y-2, z-3
     x,y,z = qubit(), qubit(), qubit()
-
     x = h(x)
-    y = h(y)
-    y = x(y)
-    #q = x(z)
-
-    x,y = cz(x,y)
+    x,y = cx(x,y)
+    y,z = cx(y,z)
+    z,x = cx(z,x)
+    z,y = cx(z,y)
 
     return x

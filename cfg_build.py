@@ -2,6 +2,7 @@ import re
 from enum import Enum
 
 import networkx as nx
+from matplotlib import pyplot as plt
 
 pattern_gate_app = r'^\s*([\w\s,]+)\s*=\s*([\w\s,]+\([\w\s,]+\))\s*$'
 pattern_init = r'^(\s*\w+\s*(\s*,\s*\w)*)\s*=\s*qubit\(\s*\)(\s*,\s*qubit\(\s*\))*'
@@ -32,6 +33,16 @@ class NodeType(Enum):
     Ret = 7
     Init = 8
     Discard = 9
+
+
+def print_cfg(cfg):
+    pos = nx.spring_layout(cfg)
+    labels = nx.get_edge_attributes(cfg, 'label')
+    nx.draw(cfg, pos, with_labels=True, node_size=300, node_color="lightblue", font_size=8, font_color="black",
+            font_weight="bold", arrows=True)
+    nx.draw_networkx_edge_labels(cfg, pos, edge_labels=labels, font_size=7)
+    plt.title("Control Flow Graph with Edge Labels")
+    plt.show()
 
 
 def clean_empty_line(lines):
@@ -116,6 +127,14 @@ def build_cfg(lines, cfg=None, prev_node=None):
     if lines[0].replace(" ", "").startswith('#'):
         return build_cfg(lines[1:], cfg, prev_node)
 
+    if 'pass' in lines[0]:
+        p_node = new_node()
+        cfg.add_node(p_node)
+        cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.Skip, ''))
+
+        return build_cfg(lines[1:], cfg, p_node)
+
+
     if 'def' in lines[0]:
         graph = nx.DiGraph()
         start_node = 'Start'
@@ -148,6 +167,7 @@ def build_cfg(lines, cfg=None, prev_node=None):
 
     if 'return' in lines[0]:
         cfg.add_edge(prev_node, exit_node, label=EdgeLabel(NodeType.Ret, lines[0].replace(" ", "").replace("\n", "")[6:].split(',')))
+        #cfg.add_edge(prev_node, exit_node, label=EdgeLabel(NodeType.GateCall, [['o'], 'x', ['x']]))
         return cfg
 
     if 'discard' in lines[0]:

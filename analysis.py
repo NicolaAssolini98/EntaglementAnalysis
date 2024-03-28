@@ -2,6 +2,8 @@ import copy
 from enum import Enum
 from functools import reduce
 
+import networkx as nx
+
 from cfg_build import NodeType
 
 one_qubit_gate = ['x', 'y', 'z', 's', 'h', 't', 'tdg', 'rz', 'rx']
@@ -19,6 +21,29 @@ class Value(Enum):
     EY = 9
     ES = 10
     Top = 11
+
+
+relation = [
+    (Value.Bot, Value.Z),
+    (Value.Bot, Value.X),
+    (Value.Bot, Value.Y),
+    (Value.Bot, Value.EX),
+    (Value.Bot, Value.EY),
+    (Value.Z, Value.R),
+    (Value.Z, Value.D),
+    (Value.X, Value.R),
+    (Value.X, Value.S),
+    (Value.Y, Value.D),
+    (Value.Y, Value.S),
+    (Value.EX, Value.ES),
+    (Value.EY, Value.ES),
+    (Value.S, Value.Top),
+    (Value.D, Value.Top),
+    (Value.R, Value.Top),
+    (Value.ES, Value.Top)
+]
+cpo = nx.DiGraph()
+cpo.add_edges_from(relation)
 
 
 class Pair:
@@ -64,7 +89,8 @@ class Pair:
             # return {var}
             return set()
         if len(set_v) > 1:
-            exit('Partition ill-formed')
+            print(self.sets)
+            exit('Get set %s: Partition ill-formed', var)
         return set_v[0]
 
     def join(self, var1, var2):
@@ -83,7 +109,7 @@ class Pair:
 
         if len(set_v1) > 0:
             if set_v1 != set_v2:
-                exit('Partition ill-formed')
+                exit('Remove from (%s,%s) Partition ill-formed' % (var1, var2))
 
             self.sets.remove(set_v1)
             set_v1.discard(var2)
@@ -288,10 +314,109 @@ def abs_semantics(fun, abs_dom, in_vars):
         return set_entagled_on_value(abs_dom, Value.Top, ctrl, targ)
 
     if fun == 'cz':
-        abs_dom = abs_semantics('h',abs_dom, in_vars[1:])
+        abs_dom = abs_semantics('h', abs_dom, in_vars[1:])
         abs_dom = abs_semantics('cx', abs_dom, in_vars)
         return abs_semantics('h', abs_dom, in_vars[1:])
 
+
+def merge_sets_with_common_elements(list_of_sets):
+    # Set to store the merged sets
+    fixpoint = False
+    while not fixpoint:
+        old_sets = copy.deepcopy(list_of_sets)
+        merged_sets = []
+        # Loop through each set in the list
+        for s in list_of_sets:
+            # Check if the set has elements in common with any other merged set
+            for m in merged_sets:
+                if s & m:
+                    # Merge the set with the other set
+                    m |= s
+                    break
+            else:
+                # If the set has no elements in common with any other merged set, add it to the merged sets
+                merged_sets.append(s)
+            # print('s: %s, merged: %s' % (str(s), str(merged_sets)))
+
+        fixpoint = (merged_sets == old_sets)
+        list_of_sets = merged_sets
+        # print('----')
+    return list_of_sets
+
+
+def elements_from_sets(list_of_sets):
+    # Initialize an empty set to store unique elements
+    unique_elements = set()
+
+    # Iterate through each set in the list
+    for s in list_of_sets:
+        # Add the elements of the current set to the set of unique elements
+        unique_elements.update(s)
+
+    # Convert the set of unique elements to a list and return it
+    return unique_elements
+
+
+def lub(val1, val2):
+    queue1 = [val1]
+    queue2 = [val2]
+
+    # Inizializza un insieme per tenere traccia dei nodi visitati
+    visited1 = set()
+    visited2 = set()
+
+    # Continua la BFS finché ci sono nodi nella coda
+    while queue1 or queue2:
+        # print('q1: ' + str(queue1))
+        # print('v1: ' + str(visited1))
+        # print('q2: ' + str(queue2))
+        # print('v2: ' + str(visited2))
+        # print()
+        if queue1:
+            current_node1 = queue1.pop(0)
+            visited1.add(current_node1)
+            neighbors1 = list(cpo.neighbors(current_node1))
+            for neighbor in neighbors1:
+                if neighbor not in visited1:
+                    queue1.append(neighbor)
+        if queue2:
+            current_node2 = queue2.pop(0)
+            visited2.add(current_node2)
+            neighbors2 = list(cpo.neighbors(current_node2))
+            for neighbor in neighbors2:
+                if neighbor not in visited2:
+                    queue2.append(neighbor)
+
+        intersection = visited1 & visited2
+        if intersection:
+            return intersection.pop()
+
+    return None
+
+
+def join_2_pairs(pair1, pair2):
+    """
+    :type pair1: Pair
+    :type pair2: Pair
+    :return:  Pair()
+    """
+    if pair1 == pair2:
+        return pair1
+
+    join_sets = merge_sets_with_common_elements(copy.deepcopy(pair1.sets) + copy.deepcopy(pair2.sets))
+
+    all_vars = elements_from_sets(join_sets)
+    join_store = dict()
+    for var in all_vars:
+        if (pair1.get_set(var) == pair2.get_set(var) or pair1.get_store_val(var) == Value.Bot
+                or pair2.get_store_val(var) == Value.Bot):
+            join_store[var] = lub(pair1.get_store_val(var), pair2.get_store_val(var))
+        else:
+            join_store[var] = Value.Top
+
+    join_pair = Pair(join_store, join_sets)
+
+    return join_pair
 
 
 def entaglement_analysis(cfg):
@@ -320,13 +445,18 @@ def entaglement_analysis(cfg):
                 temps_pairs.append(temp)
 
             if len(temps_pairs) > 0:
-                join = temps_pairs[0]
+                join = reduce(lambda x, y: join_2_pairs(x, y), temps_pairs)
             else:
                 join = Pair()
-            # TODO join
+            # if node == '3':
+            #     print('@@@@')
+            #     print(predecessors)
+            #     print(temps_pairs)
+            #     print(join)
+            #     print('@@@@')
             pairs[node] = join
-        # print(pairs[])
-        b = old_pairs == pairs
+        print(str(pairs) + '\n-----')
+
         fixpoint = (old_pairs == pairs)
 
     return pairs
