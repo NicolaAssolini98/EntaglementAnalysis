@@ -9,6 +9,7 @@ pattern_init = r'^(\s*\w+\s*(\s*,\s*\w)*)\s*=\s*qubit\(\s*\)(\s*,\s*qubit\(\s*\)
 pattern_measure = r'\w'
 node_count = 1
 exit_node = 'Exit'
+start_node = 'Start'
 
 
 class EdgeLabel:
@@ -142,7 +143,6 @@ def build_cfg(lines, cfg=None, prev_node=None):
     if 'def' in lines[0]:
         # def fun(x: qubit, v: qubit , _, )...:
         graph = nx.DiGraph()
-        start_node = 'Start'
         reset_count()
         graph.add_node(start_node)
         graph.add_node(exit_node)
@@ -228,8 +228,6 @@ def build_cfg(lines, cfg=None, prev_node=None):
         out_vars = clean_var_names(part[0].split(","))
         fun_name = extract_function_name(part[1])
         in_vars = clean_var_names(extract_function_args(part[1]))
-
-        print(in_vars)
 
         cfg.add_edge(prev_node, p_node, label=EdgeLabel(NodeType.GateCall, [out_vars, fun_name, in_vars]))
 

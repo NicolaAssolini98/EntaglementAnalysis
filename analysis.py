@@ -4,7 +4,7 @@ from functools import reduce
 
 import networkx as nx
 
-from cfg_build import NodeType
+from cfg_build import NodeType, exit_node, start_node
 
 one_qubit_gate = ['x', 'y', 'z', 's', 'h', 't', 'tdg', 'rz', 'rx']
 
@@ -46,7 +46,7 @@ cpo = nx.DiGraph()
 cpo.add_edges_from(relation)
 
 
-class Pair:
+class Ent_Abs_Dom:
     def __init__(self, store=None, sets=None):
         if store is None:
             self.store = dict()
@@ -81,7 +81,7 @@ class Pair:
                 s.add(new_name)
 
     def copy(self):
-        return Pair(self.store.copy(), copy.deepcopy(self.sets))
+        return Ent_Abs_Dom(self.store.copy(), copy.deepcopy(self.sets))
 
     def get_set(self, var):
         set_v = [s for s in self.sets if var in s]
@@ -159,7 +159,7 @@ class Pair:
         return self.__str__()
 
     def __eq__(self, other):
-        if isinstance(other, Pair):
+        if isinstance(other, Ent_Abs_Dom):
             return self.store == other.store and self.sets == other.sets
         return False
 
@@ -170,31 +170,23 @@ class Pair:
         return False
 
 
-def copy_sets(sets):
-    """
-    :type sets: dict
-    :return:
-    """
-    new_live_vars = {node: sets[node].copy() for node in sets.keys()}
-
-    return new_live_vars
-
-
 def consumption_analysis(cfg):
+    # used for checking consumption
     avs_vars = {node: set() for node in cfg.nodes()}
+    # used for checking overwriting
     ovs_vars = {node: set() for node in cfg.nodes()}
 
     fixpoint = False
     while not fixpoint:
-        old_avls = copy_sets(avs_vars)
-        old_ovs = copy_sets(ovs_vars)
+        old_avs = {node: avs_vars[node].copy() for node in avs_vars.keys()}
+        old_ovs = {node: ovs_vars[node].copy() for node in ovs_vars.keys()}
         for node in cfg.nodes():
             temps_avs, temps_ovs = [], []
             predecessors = list(cfg.predecessors(node))
-            for prec in predecessors:
+            for pred in predecessors:
                 added_vars = set()
                 removed_vars = set()
-                label = cfg[prec][node]["label"]
+                label = cfg[pred][node]["label"]
                 inst_type = label.type
                 instr = label.value
                 if inst_type == NodeType.Args or inst_type == NodeType.Init:
@@ -207,8 +199,8 @@ def consumption_analysis(cfg):
                     # [['out1', 'out2'], 'cx', ['in1', 'in2']]
                     added_vars.update(instr[0])
                     removed_vars.update(instr[2])
-                temp_avs = old_avls[prec] - removed_vars
-                temp_ovs = old_avls[prec] - removed_vars
+                temp_avs = old_avs[pred] - removed_vars
+                temp_ovs = old_avs[pred] - removed_vars
                 temp_avs.update(added_vars)
                 temp_ovs.update(added_vars)
                 temps_avs.append(temp_avs)
@@ -225,9 +217,8 @@ def consumption_analysis(cfg):
             avs_vars[node] = intersection
             ovs_vars[node] = union
 
-        fixpoint = (old_avls == avs_vars) and (old_ovs == ovs_vars)
+        fixpoint = (old_avs == avs_vars) and (old_ovs == ovs_vars)
 
-    # TODO test overwriting
     for edge in cfg.edges:
         label = cfg[edge[0]][edge[1]]["label"]
         inst_type = label.type
@@ -248,6 +239,60 @@ def consumption_analysis(cfg):
             if not set(instr).isdisjoint(ovs_vars[edge[0]]):
                 exit('Instr %s at node %s overwrite variable' % (instr, edge[0]))
     return avs_vars, ovs_vars
+
+
+def lub_2_pairs(pair1, pair2):
+    safe_intersection = pair1[0] & pair2[0]
+    unsafe_union = pair1[1] | pair2[1] | (pair1[0] ^ pair2[0])
+
+    return safe_intersection, unsafe_union
+
+
+def liveness_analysis(cfg):
+    pairs = {node: None for node in cfg.nodes()}
+    pairs[exit_node] = (set(), set())
+
+    fixpoint = False
+    while not fixpoint:
+        print(pairs)
+        old_pairs = {node: copy.deepcopy(pairs[node]) if pairs[node] is not None else None for node in pairs.keys()}
+        for node in list(cfg.nodes()):
+            temps_pairs = []
+            successors = list(cfg.successors(node))
+            for suc in successors:
+                added_vars = set()
+                removed_vars = set()
+                label = cfg[node][suc]["label"]
+                inst_type = label.type
+                instr = label.value
+                if inst_type == NodeType.Args or inst_type == NodeType.Init:
+                    # ['arg1', 'arg2']
+                    removed_vars.update(instr)
+                elif inst_type == NodeType.Ret or inst_type == NodeType.Discard or inst_type == NodeType.Measure:
+                    # ['arg1', 'arg2']
+                    added_vars.update(instr)
+                elif inst_type == NodeType.GateCall:
+                    # [['out1', 'out2'], 'cx', ['in1', 'in2']]
+                    added_vars.update(instr[2])
+                    removed_vars.update(instr[0])
+
+                if old_pairs[suc] is not None:
+                    temp_safe = old_pairs[suc][0] - removed_vars
+                    temp_unsafe = old_pairs[suc][1] - removed_vars
+                    temp_safe.update(added_vars)
+                    temps_pairs.append((temp_safe, temp_unsafe))
+
+            if len(temps_pairs) > 0:
+                lub = reduce(lambda x, y: lub_2_pairs(x, y), temps_pairs)
+            elif len(successors) == 0:
+                lub = old_pairs[node]
+            else:
+                lub = None
+            pairs[node] = lub
+
+        fixpoint = (old_pairs == pairs)
+
+    return pairs
 
 
 def compute_one_qubit_gate(fun, val1):
@@ -356,11 +401,10 @@ def merge_sets_with_common_elements(list_of_sets):
             else:
                 # If the set has no elements in common with any other merged set, add it to the merged sets
                 merged_sets.append(s)
-            # print('s: %s, merged: %s' % (str(s), str(merged_sets)))
+
 
         fixpoint = (merged_sets == old_sets)
         list_of_sets = merged_sets
-        # print('----')
     return list_of_sets
 
 
@@ -377,7 +421,7 @@ def elements_from_sets(list_of_sets):
     return unique_elements
 
 
-def lub(val1, val2):
+def lub_store_values(val1, val2):
     queue1 = [val1]
     queue2 = [val2]
 
@@ -387,11 +431,6 @@ def lub(val1, val2):
 
     # Continua la BFS finché ci sono nodi nella coda
     while queue1 or queue2:
-        # print('q1: ' + str(queue1))
-        # print('v1: ' + str(visited1))
-        # print('q2: ' + str(queue2))
-        # print('v2: ' + str(visited2))
-        # print()
         if queue1:
             current_node1 = queue1.pop(0)
             visited1.add(current_node1)
@@ -414,45 +453,43 @@ def lub(val1, val2):
     return None
 
 
-def join_2_pairs(pair1, pair2):
+def join_2_abs_doms(abs1, abs2):
     """
-    :type pair1: Pair
-    :type pair2: Pair
+    :type abs1: Ent_Abs_Dom
+    :type abs2: Ent_Abs_Dom
     :return:  Pair()
     """
-    if pair1 == pair2:
-        return pair1
+    if abs1 == abs2:
+        return abs1
 
-    join_sets = merge_sets_with_common_elements(copy.deepcopy(pair1.sets) + copy.deepcopy(pair2.sets))
+    join_sets = merge_sets_with_common_elements(copy.deepcopy(abs1.sets) + copy.deepcopy(abs2.sets))
 
     all_vars = elements_from_sets(join_sets)
     join_store = dict()
     for var in all_vars:
-        if (pair1.get_set(var) == pair2.get_set(var) or pair1.get_store_val(var) == Value.Bot
-                or pair2.get_store_val(var) == Value.Bot):
-            join_store[var] = lub(pair1.get_store_val(var), pair2.get_store_val(var))
+        if (abs1.get_set(var) == abs2.get_set(var) or abs1.get_store_val(var) == Value.Bot
+                or abs2.get_store_val(var) == Value.Bot):
+            join_store[var] = lub_store_values(abs1.get_store_val(var), abs2.get_store_val(var))
         else:
             join_store[var] = Value.Top
 
-    join_pair = Pair(join_store, join_sets)
+    join_pair = Ent_Abs_Dom(join_store, join_sets)
 
     return join_pair
 
 
 def entaglement_analysis(cfg, consider_discard=False):
-    pairs = {node: Pair() for node in cfg.nodes()}
+    abs_doms = {node: Ent_Abs_Dom() for node in cfg.nodes()}
 
     fixpoint = False
     while not fixpoint:
-        old_pairs = copy_sets(pairs)
+        old_doms = {node: abs_doms[node].copy() for node in abs_doms.keys()}
         for node in cfg.nodes():
-            # print('<--')
-            # print(node)
             temps_pairs = []
             predecessors = list(cfg.predecessors(node))
             for prec in predecessors:
                 label = cfg[prec][node]["label"]
-                temp = pairs[prec].copy()
+                temp = abs_doms[prec].copy()
                 inst_type = label.type
                 instr = label.value
                 if inst_type == NodeType.Init:
@@ -478,20 +515,13 @@ def entaglement_analysis(cfg, consider_discard=False):
                 temps_pairs.append(temp)
 
             if len(temps_pairs) > 0:
-                join = reduce(lambda x, y: join_2_pairs(x, y), temps_pairs)
+                join = reduce(lambda x, y: join_2_abs_doms(x, y), temps_pairs)
             else:
-                join = Pair()
-            # if node >= '4':
-            #     print(predecessors)
-            #     print(temps_pairs)
-            #     print(join)
-            # print('-->')
-            # print()
+                join = Ent_Abs_Dom()
 
-            pairs[node] = join
-        print(str(pairs) + '\n-----')
+            abs_doms[node] = join
+        print(str(abs_doms) + '\n-----')
 
-        fixpoint = (old_pairs == pairs)
+        fixpoint = (old_doms == abs_doms)
 
-    return pairs
-
+    return abs_doms

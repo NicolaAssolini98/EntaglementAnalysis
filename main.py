@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from cfg_build import build_cfg, clean_empty_line, print_cfg
 from parser import obtain_function
-from analysis import consumption_analysis, entaglement_analysis
+from analysis import consumption_analysis, entaglement_analysis, liveness_analysis
 
 """
 Assunzioni:
@@ -35,8 +35,8 @@ g = build_cfg(clean_empty_line(groups[0]))
 # print(type(g))
 # print_cfg(g)
 # res1, res2 = consumption_analysis(g)
+print('-------')
+print(liveness_analysis(g))
 
-# print(res1)
-# print(res2)
-consider_discard = True
-print(entaglement_analysis(g, consider_discard))
+# consider_discard = True
+# print(entaglement_analysis(g, consider_discard))

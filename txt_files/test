@@ -32,17 +32,6 @@
 
 
 @guppy(module)
-def main():
-    x = qubit()
-    x = h(x)
-    x = s(x)
-    x = rx(x,_)
-    x = t(x)
-
-    return x
-
-
-@guppy(module)
 # Teleports the stxte in `src` to `tgt`
 def toffoli(_:bool) -> tuple[qubit, qubit, qubit]:
 
@@ -53,6 +42,19 @@ def toffoli(_:bool) -> tuple[qubit, qubit, qubit]:
     while e:
         q = qubit()
         y,q = cx(y,q)
-        discard(q)
 
     return x
+
+
+
+@guppy(module)
+def main():
+    x = qubit()
+    x = h(x)
+    x = s(x)
+    x = rx(x,_)
+    x = t(x)
+
+    return x
+
+
