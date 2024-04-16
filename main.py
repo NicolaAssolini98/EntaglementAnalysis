@@ -2,10 +2,11 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 
-from cfg_build import build_cfg, clean_empty_line, print_cfg
-from parser import obtain_function
+from cfg_build import build_cfg, print_cfg
+from parser import obtain_function, clean_empty_line_and_comment
 from analysis import consumption_analysis, entaglement_analysis, liveness_analysis
 
+debug = True
 """
 Assunzioni:
 non posso scrivere:
@@ -19,11 +20,7 @@ tutte le variabili classiche devono essere segnate come '_'
 """
 
 
-# TODO aggiungi rz, rx
-
-
-
-file_path = 'txt_files/test'
+file_path = 'txt_files/test_entangled'
 tag = '@guppy'
 groups = obtain_function(file_path)
 # for group in groups:
@@ -31,12 +28,17 @@ groups = obtain_function(file_path)
 #     print(group)
 
 
-g = build_cfg(clean_empty_line(groups[0]))
-# print(type(g))
-# print_cfg(g)
-# res1, res2 = consumption_analysis(g)
-print('-------')
-print(liveness_analysis(g))
+for group in groups:
+    code = clean_empty_line_and_comment(group)
+    # print(code)
+    name, cfg = build_cfg(code)
+    print_cfg(cfg)
+    # res1, res2 = consumption_analysis(g)
+
+    print(name, ':')
+    print(entaglement_analysis(cfg)['Exit'])
+    break
+
 
 # consider_discard = True
 # print(entaglement_analysis(g, consider_discard))

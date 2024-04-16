@@ -20,3 +20,15 @@ def obtain_function(file_path):
     return groups
 
 
+def clean_empty_line_and_comment(lines):
+    res = []
+    for line in lines:
+        for char in line:
+            if not char.isspace():
+                if not line.replace(" ", "").startswith('#'):
+                    res.append(line)
+                break
+
+    return res
+
+

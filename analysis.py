@@ -4,9 +4,14 @@ from functools import reduce
 
 import networkx as nx
 
-from cfg_build import NodeType, exit_node, start_node
+from cfg_build import NodeType, exit_node
 
-one_qubit_gate = ['x', 'y', 'z', 's', 'h', 't', 'tdg', 'rz', 'rx']
+# To disable debug print in this file
+debug = False
+def disable_print(*args, **kwargs):
+    pass
+if not debug:
+    print = disable_print
 
 
 class Value(Enum):
@@ -14,39 +19,33 @@ class Value(Enum):
     Z = 2
     X = 3
     Y = 4
-    S = 5
-    D = 6
-    R = 7
-    EX = 8
-    EY = 9
-    ES = 10
-    Top = 11
+    XY = 5
+    YZ = 6
+    XZ = 7
+    S = 8
+    Top = 9
 
 
 relation = [
     (Value.Bot, Value.Z),
     (Value.Bot, Value.X),
     (Value.Bot, Value.Y),
-    (Value.Bot, Value.EX),
-    (Value.Bot, Value.EY),
-    (Value.Z, Value.R),
-    (Value.Z, Value.D),
-    (Value.X, Value.R),
-    (Value.X, Value.S),
-    (Value.Y, Value.D),
-    (Value.Y, Value.S),
-    (Value.EX, Value.ES),
-    (Value.EY, Value.ES),
+    (Value.Z, Value.XZ),
+    (Value.Z, Value.YZ),
+    (Value.X, Value.XY),
+    (Value.X, Value.XZ),
+    (Value.Y, Value.XY),
+    (Value.Y, Value.YZ),
+    (Value.XY, Value.S),
     (Value.S, Value.Top),
-    (Value.D, Value.Top),
-    (Value.R, Value.Top),
-    (Value.ES, Value.Top)
+    (Value.XZ, Value.Top),
+    (Value.YZ, Value.Top)
 ]
 cpo = nx.DiGraph()
 cpo.add_edges_from(relation)
 
 
-class Ent_Abs_Dom:
+class EntAbsDom:
     def __init__(self, store=None, sets=None):
         if store is None:
             self.store = dict()
@@ -71,6 +70,10 @@ class Ent_Abs_Dom:
     def update_value(self, key, value):
         self.store[key] = value
 
+    def update_value_set(self, key, value):
+        for v in self.get_set(key):
+            if self.store[v] != Value.Top:
+                self.store[v] = value
         # self.part.add(key)
 
     def rename(self, old_name, new_name):
@@ -81,7 +84,7 @@ class Ent_Abs_Dom:
                 s.add(new_name)
 
     def copy(self):
-        return Ent_Abs_Dom(self.store.copy(), copy.deepcopy(self.sets))
+        return EntAbsDom(self.store.copy(), copy.deepcopy(self.sets))
 
     def get_set(self, var):
         set_v = [s for s in self.sets if var in s]
@@ -91,7 +94,7 @@ class Ent_Abs_Dom:
             return set()
         if len(set_v) > 1:
             print(self.sets)
-            exit('Get set %s: Partition ill-formed', var)
+            exit('Get set %s: Partition ill-formed' % var)
         return set_v[0]
 
     def join(self, var1, var2):
@@ -106,7 +109,7 @@ class Ent_Abs_Dom:
 
     def remove_from(self, var1, var2):
         """
-        Remove var2 from the set of var2
+        Remove var2 from the set of var1
         """
         set_v1 = self.get_set(var1)
         set_v2 = self.get_set(var2)
@@ -125,41 +128,23 @@ class Ent_Abs_Dom:
 
         return not set_v1 == set_v2
 
-    def disentagled_on_value(self, val, var1, var2):
+    def disentagled(self, var1, var2):
         self.update_value(var2, Value.Z)
         self.remove_from(var1, var2)
-        ent_set = self.get_set(var1)
-        if len(ent_set) == 1:
-            self.update_value(var1, val)
-
-    def measure(self, var):
-        if (self.get_store_val(var) == Value.EX or self.get_store_val(var) == Value.EY
-                or self.get_store_val(var) == Value.ES):
-            ent_with_var = copy.deepcopy(self.get_set(var))
-            for vv in ent_with_var:
-                if vv != var:
-                    # in this case al variables collapse to Value.Z
-                    if (self.get_store_val(vv) == Value.EX or self.get_store_val(vv) == Value.EY
-                            or self.get_store_val(vv) == Value.ES):
-                        self.update_value(vv, Value.Z)
-                        self.remove_from(var, vv)
-
-        self.remove_from(var, var)
-        self.update_value(var, Value.Z)
 
     def set_entagled_on_value(self, val, var1, var2):
-        self.update_value(var1, val)
+        # self.update_value(var1, val)
         self.update_value(var2, val)
         self.join(var1, var2)
 
     def __str__(self):
-        return "store: %s\n sets:%s\n" % (str(self.store), str(self.sets))
+        return "\n\t store: %s\n\t sets:%s\n" % (str(self.store), str(self.sets))
 
     def __repr__(self):
         return self.__str__()
 
     def __eq__(self, other):
-        if isinstance(other, Ent_Abs_Dom):
+        if isinstance(other, EntAbsDom):
             return self.store == other.store and self.sets == other.sets
         return False
 
@@ -295,93 +280,130 @@ def liveness_analysis(cfg):
     return pairs
 
 
-def compute_one_qubit_gate(fun, val1):
+def abs_semantics(fun, abs_dom, in_vars):
+    val1 = abs_dom.get_store_val(in_vars[0])
+
     if fun == 'x' or fun == 'y' or fun == 'z':
-        return val1
+        pass  # abs_dom.update_value(in_vars[0], val1)
+
     elif fun == 'h':
-        if val1 == Value.Y or val1 == Value.R or val1 == Value.Bot:
-            return val1
-        elif val1 == Value.Z:
-            return Value.X
-        elif val1 == Value.X:
-            return Value.Z
-        elif val1 == Value.D:
-            return Value.S
-        elif val1 == Value.S:
-            return Value.D
+        if len(abs_dom.get_set(in_vars[0])) == 1:
+            if val1 == Value.Bot or val1 == Value.Y or val1 == Value.XZ:
+                pass  # abs_dom.update_value(in_vars[0], val1)
+            elif val1 == Value.Z:
+                abs_dom.update_value(in_vars[0], Value.X)
+            elif val1 == Value.X:
+                abs_dom.update_value(in_vars[0], Value.Z)
+            elif val1 == Value.XY:
+                abs_dom.update_value(in_vars[0], Value.YZ)
+            elif val1 == Value.YZ:
+                abs_dom.update_value(in_vars[0], Value.XY)
+            else:
+                abs_dom.update_value(in_vars[0], Value.Top)
         else:
-            return Value.Top
+            if val1 == Value.Bot:
+                pass  # abs_dom.update_value(in_vars[0], val1)
+            else:
+                abs_dom.update_value(in_vars[0], Value.Top)
+
+    elif fun == 's' or fun == 'sdg':
+        if val1 == Value.Z or val1 == Value.XY or val1 == Value.S or val1 == Value.Bot:
+            pass  # abs_dom.update_value(in_vars[0], val1)
+        elif val1 == Value.Y:
+            abs_dom.update_value_set(in_vars[0], Value.X)
+        elif val1 == Value.X:
+            abs_dom.update_value_set(in_vars[0], Value.Y)
+        elif val1 == Value.YZ:
+            abs_dom.update_value_set(in_vars[0], Value.XZ)
+        elif val1 == Value.XZ:
+            abs_dom.update_value_set(in_vars[0], Value.YZ)
+        else:
+            abs_dom.update_value(in_vars[0], Value.Top)
+
     elif fun == 't' or fun == 'tdg':
         if val1 == Value.Z or val1 == Value.S or val1 == Value.Bot:
-            return val1
+            pass  # abs_dom.update_value(in_vars[0], val1)
         elif val1 == Value.X or val1 == Value.Y:
-            return Value.S
+            abs_dom.update_value_set(in_vars[0], Value.S)
         else:
-            return Value.Top
-    elif fun == 's':
-        if val1 == Value.Z or val1 == Value.S or val1 == Value.Bot:
-            return val1
-        elif val1 == Value.Y:
-            return Value.X
-        elif val1 == Value.X:
-            return Value.Y
-        elif val1 == Value.D:
-            return Value.R
-        elif val1 == Value.R:
-            return Value.D
-        else:
-            return Value.Top
+            abs_dom.update_value(in_vars[0], Value.Top)
+
     elif fun == 'rx':
-        if val1 == Value.X or val1 == Value.Bot:
-            return val1
+        if len(abs_dom.get_set(in_vars[0])) == 1 and (val1 == Value.X or val1 == Value.Bot):
+            pass  # abs_dom.update_value(in_vars[0], val1)
         else:
-            return Value.Top
+            abs_dom.update_value(in_vars[0], Value.Top)
+
     elif fun == 'rz':
-        if val1 == Value.Z or val1 == Value.Bot:
-            return val1
+        if val1 == Value.Z or val1 == Value.Bot or val1 == Value.S:
+            pass  # abs_dom.update_value(in_vars[0], val1)
+        if val1 == Value.X or val1 == Value.Y or val1 == Value.XY:
+            abs_dom.update_value(in_vars[0], Value.S)
         else:
-            return Value.Top
+            abs_dom.update_value(in_vars[0], Value.Top)
 
-    return Value.Top
-
-
-def abs_semantics(fun, abs_dom, in_vars):
-    if fun in one_qubit_gate:
-        v0 = abs_dom.get_store_val(in_vars[0])
-        v1 = compute_one_qubit_gate(fun, v0)
-        abs_dom.update_value(in_vars[0], v1)
-        return abs_dom
-    if fun == 'cx':
+    elif fun == 'cx':
         ctrl = in_vars[0]
         targ = in_vars[1]
         v_c = abs_dom.get_store_val(ctrl)
         v_t = abs_dom.get_store_val(targ)
-        if (v_c == Value.Z or v_t == Value.X or v_c == Value.Bot or v_t == Value.Bot) and abs_dom.is_disjoint(ctrl,
-                                                                                                              targ):
-            pass
-        elif (v_c == Value.X or v_c == Value.EX) and v_t == Value.Z and abs_dom.is_disjoint(ctrl, targ):
-            abs_dom.set_entagled_on_value(Value.EX, ctrl, targ)
-        elif (v_c == Value.Y or v_c == Value.EY) and v_t == Value.Z and abs_dom.is_disjoint(ctrl, targ):
-            abs_dom.set_entagled_on_value(Value.EY, ctrl, targ)
-        elif (v_c == Value.S or v_c == Value.ES) and v_t == Value.Z and abs_dom.is_disjoint(ctrl, targ):
-            abs_dom.set_entagled_on_value(Value.ES, ctrl, targ)
-        elif v_c == Value.EX and v_t == v_c and not abs_dom.is_disjoint(ctrl, targ):
-            abs_dom.disentagled_on_value(Value.X, ctrl, targ)
-        elif v_c == Value.EY and v_t == v_c and not abs_dom.is_disjoint(ctrl, targ):
-            abs_dom.disentagled_on_value(Value.Y, ctrl, targ)
-        elif v_c == Value.ES and v_t == v_c and not abs_dom.is_disjoint(ctrl, targ):
-            abs_dom.disentagled_on_value(Value.S, ctrl, targ)
-        elif v_t == Value.Top and not abs_dom.is_disjoint(ctrl, targ):
+        if len(abs_dom.get_set(targ)) == 1:
+            if v_c == Value.Z or v_t == Value.X or v_c == Value.Bot or v_t == Value.Bot:
+                pass
+            elif (v_c == Value.X or v_c == Value.Y or v_c == Value.S) and v_t == Value.Z:
+                abs_dom.set_entagled_on_value(v_c, ctrl, targ)
+            else:
+                abs_dom.set_entagled_on_value(Value.Top, ctrl, targ)
+
+        elif len(abs_dom.get_set(targ)) > 1:
+            if (v_c == Value.Z or v_c == Value.Bot or v_t == Value.Bot) and abs_dom.is_disjoint(ctrl, targ):
+                pass
+            elif abs_dom.is_disjoint(ctrl, targ):
+                abs_dom.set_entagled_on_value(Value.Top, ctrl, targ)
+                abs_dom.update_value_set(ctrl, Value.Top)
+            elif not abs_dom.is_disjoint(ctrl, targ):
+                if ((v_c == Value.X or v_c == Value.Y or v_c == Value.S) and
+                        (v_t == Value.X or v_t == Value.Y or v_t == Value.S)):
+                    abs_dom.disentagled(ctrl, targ)
+                else:
+                    abs_dom.update_value(ctrl, Value.Top)
+                    abs_dom.update_value(targ, Value.Top)
+
+    elif fun == 'cz':
+        ctrl = in_vars[0]
+        targ = in_vars[1]
+        v_c = abs_dom.get_store_val(ctrl)
+        v_t = abs_dom.get_store_val(targ)
+        if v_c == Value.Z or v_c == Value.Z or v_c == Value.Bot or v_t == Value.Bot:
+            # redundant, if value(q) = Z then len(abs_dom.get_set(q) = 1
+            # and (len(abs_dom.get_set(targ)) == 1 or len(abs_dom.get_set(ctrl)) == 1)):
             pass
         else:
-            abs_dom.set_entagled_on_value(Value.Top, ctrl, targ)
+            abs_dom = abs_semantics('h', abs_dom, in_vars[1:])
+            abs_dom = abs_semantics('cx', abs_dom, in_vars)
+            abs_dom = abs_semantics('h', abs_dom, in_vars[1:])
 
-        return abs_dom
+    elif fun == 'measure':
+        for var in in_vars:
+            var_val = abs_dom.get_store_val(var)
+            if var_val == Value.X or var_val == Value.Y or var_val == Value.XY or var_val == Value.S:
+                ent_with_var = copy.deepcopy(abs_dom.get_set(var))
+                for vv in ent_with_var:
+                    if vv != var:
+                        # in this case al variables collapse to Value.Z
+                        if abs_dom.get_store_val(vv) == var_val:
+                            abs_dom.update_value(vv, Value.Z)
+                            abs_dom.remove_from(var, vv)
+            if var_val == Value.Top:
+                ent_with_var = copy.deepcopy(abs_dom.get_set(var))
+                for vv in ent_with_var:
+                    if vv != var:
+                        abs_dom.update_value(vv, Value.Top)
 
-    if fun == 'cz':
-        abs_dom = abs_semantics('h', abs_dom, in_vars[1:])
-        abs_dom = abs_semantics('cx', abs_dom, in_vars)
-        return abs_semantics('h', abs_dom, in_vars[1:])
+            abs_dom.remove_from(var, var)
+            abs_dom.update_value(var, Value.Z)
+
+    return abs_dom
 
 
 def merge_sets_with_common_elements(list_of_sets):
@@ -401,7 +423,6 @@ def merge_sets_with_common_elements(list_of_sets):
             else:
                 # If the set has no elements in common with any other merged set, add it to the merged sets
                 merged_sets.append(s)
-
 
         fixpoint = (merged_sets == old_sets)
         list_of_sets = merged_sets
@@ -455,8 +476,8 @@ def lub_store_values(val1, val2):
 
 def join_2_abs_doms(abs1, abs2):
     """
-    :type abs1: Ent_Abs_Dom
-    :type abs2: Ent_Abs_Dom
+    :type abs1: EntAbsDom
+    :type abs2: EntAbsDom
     :return:  Pair()
     """
     if abs1 == abs2:
@@ -473,13 +494,13 @@ def join_2_abs_doms(abs1, abs2):
         else:
             join_store[var] = Value.Top
 
-    join_pair = Ent_Abs_Dom(join_store, join_sets)
+    join_pair = EntAbsDom(join_store, join_sets)
 
     return join_pair
 
 
 def entaglement_analysis(cfg, consider_discard=False):
-    abs_doms = {node: Ent_Abs_Dom() for node in cfg.nodes()}
+    abs_doms = {node: EntAbsDom() for node in cfg.nodes()}
 
     fixpoint = False
     while not fixpoint:
@@ -487,9 +508,9 @@ def entaglement_analysis(cfg, consider_discard=False):
         for node in cfg.nodes():
             temps_pairs = []
             predecessors = list(cfg.predecessors(node))
-            for prec in predecessors:
-                label = cfg[prec][node]["label"]
-                temp = abs_doms[prec].copy()
+            for pred in predecessors:
+                label = cfg[pred][node]["label"]
+                temp = abs_doms[pred].copy()
                 inst_type = label.type
                 instr = label.value
                 if inst_type == NodeType.Init:
@@ -498,10 +519,9 @@ def entaglement_analysis(cfg, consider_discard=False):
                         temp.add(v, Value.Z)
                 elif inst_type == NodeType.Measure:
                     # ['arg1', 'arg2']
-                    for v in instr:
-                        temp.measure(v)
+                    temp = abs_semantics('measure', temp, instr)
                 elif inst_type == NodeType.GateCall:
-                    # [['out1', 'out2'], 'cx', ['in1', 'in2']]
+                    # [['out1', 'out2'], 'g', ['in1', 'in2']]
                     temp = abs_semantics(instr[1], temp, instr[2])
                     for i in range(len(instr[2])):
                         temp.rename(instr[2][i], instr[0][i])
@@ -512,12 +532,13 @@ def entaglement_analysis(cfg, consider_discard=False):
                         for v in instr:
                             temp.update_value(v, Value.Bot)
                             temp.remove_from(v, v)
+
                 temps_pairs.append(temp)
 
             if len(temps_pairs) > 0:
                 join = reduce(lambda x, y: join_2_abs_doms(x, y), temps_pairs)
             else:
-                join = Ent_Abs_Dom()
+                join = EntAbsDom()
 
             abs_doms[node] = join
         print(str(abs_doms) + '\n-----')
