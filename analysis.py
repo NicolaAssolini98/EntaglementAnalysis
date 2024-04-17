@@ -7,7 +7,7 @@ import networkx as nx
 from cfg_build import NodeType, exit_node
 
 # To disable debug print in this file
-debug = False
+debug = True
 def disable_print(*args, **kwargs):
     pass
 if not debug:
@@ -77,7 +77,8 @@ class EntAbsDom:
         # self.part.add(key)
 
     def rename(self, old_name, new_name):
-        self.store[new_name] = self.store.pop(old_name)
+        if old_name in self.store:
+            self.store[new_name] = self.store.pop(old_name)
         for s in self.sets:
             if old_name in s:
                 s.remove(old_name)
@@ -94,7 +95,7 @@ class EntAbsDom:
             return set()
         if len(set_v) > 1:
             print(self.sets)
-            exit('Get set %s: Partition ill-formed' % var)
+            exit('Get set from \'%s\': Partition ill-formed' % var)
         return set_v[0]
 
     def join(self, var1, var2):
@@ -121,6 +122,21 @@ class EntAbsDom:
                 if len(set_v1) > 0:
                     self.sets.append(set_v1)
                 self.sets.append({var2})
+
+    def delete_var(self, var):
+        """
+        Delete var from the set of sets
+        """
+        if var in self.store:
+            del self.store[var]
+
+        set_v = self.get_set(var)
+
+        if len(set_v) > 0:
+            self.sets.remove(set_v)
+            set_v.discard(var)
+            if len(set_v) > 0:
+                self.sets.append(set_v)
 
     def is_disjoint(self, var1, var2):
         set_v1 = self.get_set(var1)
@@ -204,6 +220,17 @@ def consumption_analysis(cfg):
 
         fixpoint = (old_avs == avs_vars) and (old_ovs == ovs_vars)
 
+    return avs_vars, ovs_vars
+
+
+def check_dupl_over(cfg, avs_vars, ovs_vars):
+    '''
+    returns two list of triple:
+    (node, edge, variable) thats indicates the node in which we find the error, the edge (i.e. the instruction) that
+    generates it, and the variables that are overwritted/used after consumpion
+    '''
+    duplication = []
+    overwriting = []
     for edge in cfg.edges:
         label = cfg[edge[0]][edge[1]]["label"]
         inst_type = label.type
@@ -211,19 +238,30 @@ def consumption_analysis(cfg):
         if inst_type == NodeType.Ret or inst_type == NodeType.Discard:
             # ['arg1', 'arg2']
             if not (set(instr) <= avs_vars[edge[0]]):
-                exit('Instr %s at node %s used consumed variable' % (instr, edge[0]))
+                cons_vars = set(instr).difference(avs_vars[edge[0]])
+                duplication.append((edge[0], edge, cons_vars))
+                print('Instr %s at node %s used %s after consumption' % (instr, edge[0], cons_vars))
         elif inst_type == NodeType.GateCall:
-            # [['out1', 'out2'], 'cx', ['in1', 'in2']]
+            # [['out1', 'out2'], 'g', ['in1', 'in2']]
             if not (set(instr[2]) <= avs_vars[edge[0]]):
-                exit('Instr %s at node %s used consumed variable' % (instr, edge[0]))
-            v = ovs_vars[edge[0]] - set(instr[2])
-            if not set(instr[0]).isdisjoint(v):
-                exit('Instr %s at node %s overwrite variable' % (instr, edge[0]))
+                cons_vars = set(instr[2]).difference(avs_vars[edge[0]])
+                duplication.append((edge[0], edge, cons_vars))
+                print('Instr %s at node %s used %s after consumption' % (instr, edge[0], cons_vars))
+            # if a variable is in instr[2] and in instr[0] is ok (we consume and then redefine it)
+
+            not_cons = set(instr[0]) - set(instr[2])
+            if not not_cons.isdisjoint(ovs_vars[edge[0]]):
+                ovw_vars = ovs_vars[edge[0]] & not_cons
+                overwriting.append((edge[0], edge, ovw_vars))
+                print('Instr %s at node %s overwrite these %s variables' % (instr, edge[0], ovw_vars))
         elif inst_type == NodeType.Init:
             # ['arg1', 'arg2']
             if not set(instr).isdisjoint(ovs_vars[edge[0]]):
-                exit('Instr %s at node %s overwrite variable' % (instr, edge[0]))
-    return avs_vars, ovs_vars
+                ovw_vars = ovs_vars[edge[0]] & set(instr)
+                overwriting.append((edge[0], edge, ovw_vars))
+                print('Instr %s at node %s overwrite these %s variables' % (instr, edge[0], ovw_vars))
+
+    return duplication, overwriting
 
 
 def lub_2_pairs(pair1, pair2):
@@ -383,6 +421,7 @@ def abs_semantics(fun, abs_dom, in_vars):
             abs_dom = abs_semantics('cx', abs_dom, in_vars)
             abs_dom = abs_semantics('h', abs_dom, in_vars[1:])
 
+
     elif fun == 'measure':
         for var in in_vars:
             var_val = abs_dom.get_store_val(var)
@@ -400,8 +439,7 @@ def abs_semantics(fun, abs_dom, in_vars):
                     if vv != var:
                         abs_dom.update_value(vv, Value.Top)
 
-            abs_dom.remove_from(var, var)
-            abs_dom.update_value(var, Value.Z)
+            abs_dom.delete_var(var)
 
     return abs_dom
 
@@ -499,13 +537,15 @@ def join_2_abs_doms(abs1, abs2):
     return join_pair
 
 
-def entaglement_analysis(cfg, consider_discard=False):
+def entaglement_analysis(cfg):
     abs_doms = {node: EntAbsDom() for node in cfg.nodes()}
 
     fixpoint = False
     while not fixpoint:
         old_doms = {node: abs_doms[node].copy() for node in abs_doms.keys()}
         for node in cfg.nodes():
+            print('-------')
+            print(str(node), '\n')
             temps_pairs = []
             predecessors = list(cfg.predecessors(node))
             for pred in predecessors:
@@ -527,11 +567,8 @@ def entaglement_analysis(cfg, consider_discard=False):
                         temp.rename(instr[2][i], instr[0][i])
                 elif inst_type == NodeType.Discard:
                     # ['arg1', 'arg2']
-                    # TODO serve o non serve analizzarla???
-                    if consider_discard:
-                        for v in instr:
-                            temp.update_value(v, Value.Bot)
-                            temp.remove_from(v, v)
+                    for v in instr:
+                        temp.delete_var(v)
 
                 temps_pairs.append(temp)
 
@@ -539,9 +576,10 @@ def entaglement_analysis(cfg, consider_discard=False):
                 join = reduce(lambda x, y: join_2_abs_doms(x, y), temps_pairs)
             else:
                 join = EntAbsDom()
-
+            print(join)
+            print('-------')
             abs_doms[node] = join
-        print(str(abs_doms) + '\n-----')
+        print(str(abs_doms) + '\n@@@@')
 
         fixpoint = (old_doms == abs_doms)
 

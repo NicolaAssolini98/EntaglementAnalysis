@@ -1,16 +1,31 @@
-import sys
-
-sys.path.append("..")
-from guppylang.prelude.quantum import *
-
-# import guppylang.prelude.quantum as quantum
-
-module = GuppyModule("test")
-module.load(quantum)
 
 
+@guppy(module)
+def cond_consume(d: qubit) -> qubit:
+    a,b = qubit(),qubit()
+    c = x(a)
+    b,c = cx(b,d)
 
-# Teleports the state in `src` to `tgt`.
+    return c
+
+
+@guppy(module)
+def cond_consume(_) -> qubit:
+    b = qubit()
+    b = x(b)
+    t = qubit()
+    t = h(t)
+    e = measure(t)
+    if e:
+        c = x(b)
+    else:
+        # da aggiungere!!
+        # discard(b)
+        c = qubit()
+
+    return c
+
+
 @guppy(module)
 def toffoli(c1: qubit, c2: qubit, tgt: qubit) -> tuple[qubit, qubit, qubit]:
     tgt = h(tgt)

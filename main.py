@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from cfg_build import build_cfg, print_cfg
 from parser import obtain_function, clean_empty_line_and_comment
-from analysis import consumption_analysis, entaglement_analysis, liveness_analysis
+from analysis import consumption_analysis, entaglement_analysis, liveness_analysis, check_dupl_over
 
 debug = True
 """
@@ -20,7 +20,7 @@ tutte le variabili classiche devono essere segnate come '_'
 """
 
 
-file_path = 'txt_files/test_entangled'
+file_path = 'txt_files/test_live'
 tag = '@guppy'
 groups = obtain_function(file_path)
 # for group in groups:
@@ -33,10 +33,13 @@ for group in groups:
     # print(code)
     name, cfg = build_cfg(code)
     print_cfg(cfg)
-    # res1, res2 = consumption_analysis(g)
-
+    res1, res2 = consumption_analysis(cfg)
     print(name, ':')
-    print(entaglement_analysis(cfg)['Exit'])
+    dup, ovw = check_dupl_over(cfg, res1, res2)
+    print(dup)
+    print(ovw)
+    print('var to uncompute %s' % res2['Exit'])
+    print('---------')
     break
 
 

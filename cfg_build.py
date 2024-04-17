@@ -74,8 +74,13 @@ def new_node():
 
 
 def extract_variables(declaration):
+    '''
+    :type declaration: str
+    '''
+    sub1 = declaration.split('(')[1]
+    sub2 = sub1.split(')')[0]
     pat = r'\b(\w+)\s*:'
-    matches = re.findall(pat, declaration)
+    matches = re.findall(pat, sub2)
     return matches
 
 
@@ -125,14 +130,13 @@ def build_cfg(lines, cfg=None, prev_node=None):
     if len(lines) == 0:
         return cfg
     l = lines[0]
-    print(l)
     if 'def' in lines[0]:
         # def fun(x: qubit, v: qubit , _, )...:
         graph = nx.DiGraph()
         reset_count()
         graph.add_node(start_node)
         graph.add_node(exit_node)
-        args = extract_variables(lines[0])
+        args = clean_var_names(extract_variables(lines[0]))
         # ['x','y',]
         p_node = new_node()
         graph.add_edge(start_node, p_node, label=EdgeLabel(NodeType.Args, args))

@@ -1,29 +1,60 @@
+@guppy
+# repetition of a control not
+def test():
+    a,b = qubit(),qubit()
+    b = h(b)
+    while _ :
+        b,a = cx(b,a)
 
+    return b,a
 
-@guppy(module)
-def rus(tries: int) -> Qubit:
+@guppy
+def rus2(tries: int) -> Qubit:
     q = qubit()
     q = rx(q,_)
     while _ :
-        # Prepare ancillary qubits
         a, b = qubit(), qubit()
         a = h(a)
         b = h(b)
         a = tdg(a)
         b, a = cx(b, a)
         a = t(a)
-        _ = measure(a)
+        e = measure(a)
+        q, b = cx(q, b)
+        if not e:
+        # First part failed ; try again
+            discard(b)
+        else:
+            b = t(b)
+            e = measure(b)
+
+    # Otherwise , apply correction
+    q = x(q)
+
+    return q
+
+
+@guppy(module)
+# rus from guppy PlanQc paper
+def rus_planQc(tries: int) -> Qubit:
+    q = qubit()
+    q = rx(q,_)
+    while _ :
+        a, b = qubit(), qubit()
+        a = h(a)
+        b = h(b)
+        a = tdg(a)
+        b, a = cx(b, a)
+        a = t(a)
+        e = measure(a)
         if not e:
         # First part failed ; try again
             discard(b)
         else:
             q = t(q)
-            q = z(q)
             q, b = cx(q, b)
             b = t(b)
-            _ = measure (b)
-            if e:
-                break
+            e = measure (b)
 
     # Otherwise , apply correction
     q = x(q)
