@@ -1,12 +1,46 @@
 
+@guppy(module)
+# qua io devo inserire i 2 discard
+def cond_overwriting(_: qubit) -> qubit:
+    c = qubit()
+    if e:
+        b = qubit()
+        if e:
+            b = x(b)
+            #discard(b)
+        else:
+            #discard(b)
+            pass
+
+    b = qubit()
+
+
+    return b,c
+
+
 
 @guppy(module)
-def cond_consume(d: qubit) -> qubit:
-    a,b = qubit(),qubit()
-    c = x(a)
-    b,c = cx(b,d)
+def loop_consume(_: qubit) -> qubit:
+    c = qubit()
+    while e:
+        b = qubit()
+        b = x(b)
+        #discard(b)
+
 
     return c
+
+@guppy(module)
+def cond_consume(_: qubit) -> qubit:
+    c = qubit()
+    if e:
+        #b = qubit()
+        b = x(c)
+    else:
+        b = qubit()
+
+
+    return b
 
 
 @guppy(module)

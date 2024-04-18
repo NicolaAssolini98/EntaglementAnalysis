@@ -10,13 +10,30 @@ debug = True
 """
 Assunzioni:
 non posso scrivere:
-    if measure(bla)
+    if measure(bla):
 ma devo usare:
     r = measure(bla)
-    if r
+    if r:
+    
+
+niente funzioni in line
+non posso scrivere:
+    q = h(qubit())
+o
+    p = h(x(q))
+    
+invece devo scrivere:
+    t = qubit()
+    q = h(t)
+o
+    t = x(q)    
+    p = h(t)    
+    
+   
     
 devo sempre assegnare quando uso funzioni quantum, a parte discard
-tutte le variabili classiche devono essere segnate come '_'
+tutte le variabili classiche devono essere segnate come '_', così da essere ignorate dall'analisi
+considero un cfg semplificato, quindi niente break o continue
 """
 
 
@@ -33,13 +50,19 @@ for group in groups:
     # print(code)
     name, cfg = build_cfg(code)
     print_cfg(cfg)
-    res1, res2 = consumption_analysis(cfg)
+    inter, union = consumption_analysis(cfg)
     print(name, ':')
-    dup, ovw = check_dupl_over(cfg, res1, res2)
-    print(dup)
-    print(ovw)
-    print('var to uncompute %s' % res2['Exit'])
-    print('---------')
+    print('I: ', inter)
+    print('U: ', union)
+    dup, ovw = check_dupl_over(cfg, inter, union)
+    if len(dup) == 0:
+        print('overwriting of variable: %s' % ovw)
+        print('var to uncompute %s' % union['Exit'])
+        live_vars = liveness_analysis(cfg)
+        print(live_vars)
+        print('---------')
+    else:
+        print('used of consumed vars: %s' % dup)
     break
 
 

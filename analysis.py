@@ -8,8 +8,12 @@ from cfg_build import NodeType, exit_node
 
 # To disable debug print in this file
 debug = True
+
+
 def disable_print(*args, **kwargs):
     pass
+
+
 if not debug:
     print = disable_print
 
@@ -171,16 +175,38 @@ class EntAbsDom:
         return False
 
 
+def get_all_vars(cfg):
+    # used for checking consumption
+    all_vars = set()
+    # Iterazione su tutti gli archi del grafo e stampa delle etichette
+    for _, _, data in cfg.edges(data=True):
+        label = data['label']
+        inst_type = label.type
+        instr = label.value
+        if (inst_type == NodeType.Args or inst_type == NodeType.Init or inst_type == NodeType.Ret or
+                inst_type == NodeType.Discard or inst_type == NodeType.Measure):
+            # ['arg1', 'arg2']
+            all_vars.update(instr)
+        elif inst_type == NodeType.GateCall:
+            # [['out1', 'out2'], 'cx', ['in1', 'in2']]
+            all_vars.update(instr[0])
+            all_vars.update(instr[2])
+
+    return all_vars
+
+
 def consumption_analysis(cfg):
     # used for checking consumption
-    avs_vars = {node: set() for node in cfg.nodes()}
+    all_vars = get_all_vars(cfg)
+    avs_inter = {node: all_vars for node in cfg.nodes()}
     # used for checking overwriting
-    ovs_vars = {node: set() for node in cfg.nodes()}
+    avs_union = {node: set() for node in cfg.nodes()}
 
+    get_all_vars(cfg)
     fixpoint = False
     while not fixpoint:
-        old_avs = {node: avs_vars[node].copy() for node in avs_vars.keys()}
-        old_ovs = {node: ovs_vars[node].copy() for node in ovs_vars.keys()}
+        old_int = {node: avs_inter[node].copy() for node in avs_inter.keys()}
+        old_unn = {node: avs_union[node].copy() for node in avs_union.keys()}
         for node in cfg.nodes():
             temps_avs, temps_ovs = [], []
             predecessors = list(cfg.predecessors(node))
@@ -200,27 +226,27 @@ def consumption_analysis(cfg):
                     # [['out1', 'out2'], 'cx', ['in1', 'in2']]
                     added_vars.update(instr[0])
                     removed_vars.update(instr[2])
-                temp_avs = old_avs[pred] - removed_vars
-                temp_ovs = old_avs[pred] - removed_vars
+                temp_avs = old_int[pred] - removed_vars
+                temp_ovs = old_unn[pred] - removed_vars
                 temp_avs.update(added_vars)
                 temp_ovs.update(added_vars)
                 temps_avs.append(temp_avs)
-                temps_ovs.append(temp_avs)
+                temps_ovs.append(temp_ovs)
 
             if len(temps_avs) > 0:
                 intersection = reduce(lambda x, y: x & y, temps_avs)
             else:
                 intersection = set()
             if len(temps_ovs) > 0:
-                union = reduce(lambda x, y: x | y, temps_avs)
+                union = reduce(lambda x, y: x | y, temps_ovs)
             else:
                 union = set()
-            avs_vars[node] = intersection
-            ovs_vars[node] = union
+            avs_inter[node] = intersection
+            avs_union[node] = union
 
-        fixpoint = (old_avs == avs_vars) and (old_ovs == ovs_vars)
+        fixpoint = (old_int == avs_inter) and (old_unn == avs_union)
 
-    return avs_vars, ovs_vars
+    return avs_inter, avs_union
 
 
 def check_dupl_over(cfg, avs_vars, ovs_vars):
@@ -263,7 +289,6 @@ def check_dupl_over(cfg, avs_vars, ovs_vars):
 
     return duplication, overwriting
 
-
 def lub_2_pairs(pair1, pair2):
     safe_intersection = pair1[0] & pair2[0]
     unsafe_union = pair1[1] | pair2[1] | (pair1[0] ^ pair2[0])
@@ -272,12 +297,13 @@ def lub_2_pairs(pair1, pair2):
 
 
 def liveness_analysis(cfg):
+    # (safe, unsafe)
     pairs = {node: None for node in cfg.nodes()}
     pairs[exit_node] = (set(), set())
 
     fixpoint = False
     while not fixpoint:
-        print(pairs)
+        #print(pairs)
         old_pairs = {node: copy.deepcopy(pairs[node]) if pairs[node] is not None else None for node in pairs.keys()}
         for node in list(cfg.nodes()):
             temps_pairs = []
@@ -316,6 +342,11 @@ def liveness_analysis(cfg):
         fixpoint = (old_pairs == pairs)
 
     return pairs
+
+
+def insert_uncomputation(cfg, pairs, vars_to_uncompute):
+    unsafes, safes = pairs
+    pass
 
 
 def abs_semantics(fun, abs_dom, in_vars):
