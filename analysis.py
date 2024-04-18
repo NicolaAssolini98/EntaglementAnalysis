@@ -289,6 +289,7 @@ def check_dupl_over(cfg, avs_vars, ovs_vars):
 
     return duplication, overwriting
 
+
 def lub_2_pairs(pair1, pair2):
     safe_intersection = pair1[0] & pair2[0]
     unsafe_union = pair1[1] | pair2[1] | (pair1[0] ^ pair2[0])
@@ -344,9 +345,79 @@ def liveness_analysis(cfg):
     return pairs
 
 
+def get_all_definition(cfg, var):
+    # used for checking consumption
+    def_edges = set()
+    for u, v, data in cfg.edges(data=True):
+        label = data['label']
+        inst_type = label.type
+        instr = label.value
+        if inst_type == NodeType.Init or inst_type == NodeType.Args:
+            # ['arg1', 'arg2']
+            if var in instr:
+                def_edges.add((u, v))
+        elif inst_type == NodeType.GateCall:
+            # [['out1', 'out2'], 'cx', ['in1', 'in2']]
+            if var in instr[0]:
+                def_edges.add((u, v))
+
+    return def_edges
+
+
 def insert_uncomputation(cfg, pairs, vars_to_uncompute):
-    unsafes, safes = pairs
-    pass
+    """
+    :param cfg:
+    :param pairs: (S,U) for each node
+    :param vars_to_uncompute: list of variable to uncompute
+
+    return a list couples, containing the edges in which we have to uncompute variables,
+     and the variable that we need to uncompute
+    """
+    uncompute_position = []
+    all_unsafe = set()
+    for node in cfg.nodes():
+        all_unsafe.update(pairs[node][1])
+
+
+    for var in vars_to_uncompute:
+        if var not in all_unsafe:
+            print(var)
+            for u, v in get_all_definition(cfg, var):
+                print(u,v)
+                if var not in pairs[v][0]:
+                    uncompute_position.append(((u, v), var))
+        else:
+            for node in cfg.nodes():
+                # we consider the node only where var in unsafe
+                if var in pairs[node][1]:
+                    for v in cfg.successors(node):
+                        if var not in pairs[v][0] and var not in pairs[v][1]:
+                            uncompute_position.append(((node, v), var))
+
+    return uncompute_position
+
+
+def insert_discard(cfg, pairs, vars_overwritten):
+    """
+    :param cfg:
+    :param pairs: (S,U) for each node
+    :param vars_overwritten: list of variable that are overwritten
+
+    """
+    discard_position = []
+    for var in vars_overwritten:
+        print(var)
+        for u, v in get_all_definition(cfg, var):
+            if var in pairs[v][0]:
+                pass
+            elif var in pairs[v][1]:
+                for n in cfg.successors(v):
+                    if var not in pairs[n][0] and var not in pairs[n][1]:
+                        discard_position.append(((v, n), var))
+            else:
+                discard_position.append(((u, v), var))
+
+    return discard_position
 
 
 def abs_semantics(fun, abs_dom, in_vars):

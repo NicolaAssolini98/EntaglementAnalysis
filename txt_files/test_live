@@ -1,4 +1,22 @@
 
+c = h(a)
+    a,b = cx(c,b)
+
+    return b
+
+
+@guppy(module)
+def loop_consume(_: qubit) -> qubit:
+    c = qubit()
+    while e:
+        b = qubit()
+        b = x(b)
+        #discard(b)
+
+    return c
+
+
+
 @guppy(module)
 # qua io devo inserire i 2 discard
 def cond_overwriting(_: qubit) -> qubit:
@@ -19,16 +37,36 @@ def cond_overwriting(_: qubit) -> qubit:
 
 
 
-@guppy(module)
-def loop_consume(_: qubit) -> qubit:
+
+@guppy
+def and3(x: qubit,y: qubit,z: qubit):
+    r,a = qubit(),qubit()
+    x,y,a = toff(x,y,a)
+    z,a,r = toff(z,a,r)
+
+    return x,y,z,r
+
+
+
+@guppy
+# we need to uncompute c in the else branch of the first if
+# and b in the else branch of the first if and in the else of the second
+def unc_example(b: qubit):
     c = qubit()
-    while e:
-        b = qubit()
-        b = x(b)
-        #discard(b)
+    if e:
+        m = measure(b)
+        if m:
+            a = h(c)
+        else:
+            a = qubit()
+    else:
+        a = qubit()
+
+    return a
 
 
-    return c
+
+
 
 @guppy(module)
 def cond_consume(_: qubit) -> qubit:
