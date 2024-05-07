@@ -36,7 +36,8 @@ tutte le variabili classiche devono essere segnate come '_', così da essere ign
 considero un cfg semplificato, quindi niente break o continue
 """
 
-file_path = 'txt_files/test_live'
+file_path = 'txt_files/test_2'
+# file_path = 'txt_files/test_entangled'
 tag = '@guppy'
 groups = obtain_function(file_path)
 # for group in groups:
@@ -50,32 +51,34 @@ for group in groups:
     name, cfg = build_cfg(code)
     print_cfg(cfg)
     inter, union = consumption_analysis(cfg)
-    # print(name, ':')
+    print(name, ':')
     # print('I: ', inter)
     # print('U: ', union)
     dup_tuples, over_tuples = check_dupl_over(cfg, inter, union)
     if len(dup_tuples) == 0:
         pairs = liveness_analysis(cfg)
-        if len(over_tuples) == 0:
-            var_to_unc = union['Exit']
-            print('var to uncompute %s' % var_to_unc)
-            print(pairs)
-            uncomputation = insert_uncomputation(cfg, pairs, var_to_unc)
-            print(uncomputation)
-            # print('---------')
-        else:
-            print('Variable overwriting')
-            print('overwritten variables: %s' % over_tuples)
-            overwritten_vars = set()
-            for over_tuple in over_tuples:
-                overwritten_vars.update(over_tuple[2])
-            print(insert_discard(cfg, pairs, overwritten_vars))
+        # if len(over_tuples) == 0:
+        # var_to_unc = union['Exit']
+        # print('var to uncompute %s' % var_to_unc)
+        print(pairs)
+        uncomputation = insert_uncomputation(cfg, pairs)
+        print(uncomputation)
+        # print('---------')
+        # else:
+        #     print('Variable overwriting')
+        #     print('overwritten variables: %s' % over_tuples)
+        #     overwritten_vars = set()
+        #     for over_tuple in over_tuples:
+        #         overwritten_vars.update(over_tuple[2])
+        #     print(insert_discard(cfg, pairs, overwritten_vars))
     else:
         print('ERROR, used not defined/consumed variable')
         print('not defined/consumed used vars: %s' % dup_tuples)
 
-
+    print('----------------')
     break
+
+
 
 # consider_discard = True
 # print(entaglement_analysis(g, consider_discard))

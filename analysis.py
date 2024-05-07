@@ -364,7 +364,7 @@ def get_all_definition(cfg, var):
     return def_edges
 
 
-def insert_uncomputation(cfg, pairs, vars_to_uncompute):
+def insert_uncomputation(cfg, pairs):
     """
     :param cfg:
     :param pairs: (S,U) for each node
@@ -378,21 +378,20 @@ def insert_uncomputation(cfg, pairs, vars_to_uncompute):
     for node in cfg.nodes():
         all_unsafe.update(pairs[node][1])
 
+    for var in get_all_vars(cfg):
+        for u, v in get_all_definition(cfg, var):
+            if var not in pairs[v][0] and var not in pairs[v][1]:
+                uncompute_position.append(((u, v), var))
 
-    for var in vars_to_uncompute:
-        if var not in all_unsafe:
-            print(var)
-            for u, v in get_all_definition(cfg, var):
-                print(u,v)
-                if var not in pairs[v][0]:
-                    uncompute_position.append(((u, v), var))
-        else:
-            for node in cfg.nodes():
-                # we consider the node only where var in unsafe
-                if var in pairs[node][1]:
-                    for v in cfg.successors(node):
-                        if var not in pairs[v][0] and var not in pairs[v][1]:
-                            uncompute_position.append(((node, v), var))
+
+
+    for var in all_unsafe:
+        for node in cfg.nodes():
+            # we consider the node only where var in unsafe
+            if var in pairs[node][1]:
+                for v in cfg.successors(node):
+                    if var not in pairs[v][0] and var not in pairs[v][1]:
+                        uncompute_position.append(((node, v), var))
 
     return uncompute_position
 

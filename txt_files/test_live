@@ -4,16 +4,43 @@ c = h(a)
 
     return b
 
+@guppy(module)
+def fun(z: qubit):
+    r = qubit()
+    for e:
+        a = qubit()
+        a = fun(a)
+        z,a,r = toff(z,a,r)
+        #discard(a)
+
+    u = measure(u)
+    #u = qubit()
+    if u:
+        c = h(r)
+    else:
+        #consumed u used
+        c = h(u)
+
+    # unused z
+    z,c = cx(z,c)
+    return c
 
 @guppy(module)
 def loop_consume(_: qubit) -> qubit:
-    c = qubit()
-    while e:
-        b = qubit()
-        b = x(b)
-        #discard(b)
+    x,y,r = qubit()
 
-    return c
+    a = qubit()
+    while e:
+        x,a = cx(x,a)
+        y,a = cx(y,a)
+        a,y,r = toff(a,y,r)
+
+    if e:
+        _ = measure(a)
+    else:
+        _ = measure(y)
+
+    return x,r
 
 
 
@@ -34,6 +61,18 @@ def cond_overwriting(_: qubit) -> qubit:
 
 
     return b,c
+
+
+@guppy(module)
+def loop_consume(_: qubit) -> qubit:
+    c = qubit()
+    while e:
+        b = qubit()
+        b = x(b)
+        discard(b)
+
+    return c
+
 
 
 
