@@ -6,13 +6,10 @@ c = h(a)
 
 @guppy(module)
 def fun(z: qubit,u:qubit):
-    r = qubit()
+    r,a = qubit()
     while e:
         #discard(a)
-        a = qubit()
-        a = fun(a)
-        z,a,r = toff(z,a,r)
-
+        z,a,r = g(z,a,r)
 
     #e = measure(a)
     if _:

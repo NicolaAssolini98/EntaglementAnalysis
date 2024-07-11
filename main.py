@@ -60,7 +60,7 @@ for group in groups:
         # if len(over_tuples) == 0:
         # var_to_unc = union['Exit']
         # print('var to uncompute %s' % var_to_unc)
-        print(pairs)
+        print('Set (S,U) for each node:\n\t' % pairs)
         uncomputation = insert_uncomputation(cfg, pairs)
         print(uncomputation)
         # print('---------')
@@ -76,7 +76,7 @@ for group in groups:
         print('not defined/consumed used vars: %s' % dup_tuples)
 
     print('----------------')
-    break
+
 
 
 
