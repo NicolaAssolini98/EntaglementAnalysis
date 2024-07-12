@@ -31,7 +31,7 @@ class V(Enum):
     Top = 9
 
 
-class Value:
+class bValue:
     def __init__(self, values=None):
         if values is None:
             self.values = set()
@@ -40,9 +40,9 @@ class Value:
 
     def __str__(self):
         s = ''
-        for v in self.vars:
+        for v in self.values:
             s += f'{v}'
-        return f'{s[:-1]}):{self.value}'
+        return f'{s[:-1]}):{self.values}'
 
     def __repr__(self):
         return self.__str__()
@@ -83,11 +83,19 @@ class AbsDomain:
     def entangle(self, var1, var2):
         _, _, index1 = self.get_level_var(var1)
         _, _, index2 = self.get_level_var(var2)
+        parts = []
         for t in self.partitions:
             if t[-1] == index2:
-                t[-1] = index1
+                parts.append(t)
+        for part in parts:
+            s, v, i = part
+            self.partitions.remove(part)
+            self.partitions.append((s, v, index1))
 
     def put_same_level(self, var1, var2):
+        """
+        var2 takes the label from var1
+        """
         p1 = self.get_level_var(var1)
         p2 = self.get_level_var(var2)
         if p1 != p2:
@@ -110,10 +118,15 @@ class AbsDomain:
         if not self.is_separable(var):
             self.dislevel(var)
             new_index = self.__get_max_index() + 1
+            part = None
             for t in self.partitions:
                 if var in t[0]:
-                    t[-1] = new_index
-                    return
+                    part = t
+                    break
+            if part is not None:
+                s, v, i = part
+                self.partitions.remove(part)
+                self.partitions.append((s, v, new_index))
 
     def are_on_the_same_level(self, var1, var2):
         p1 = self.get_level_var(var1)
@@ -126,10 +139,15 @@ class AbsDomain:
         return index1 == index2
 
     def set_value(self, var, value):
+        part = None
         for t in self.partitions:
             if var in t[0]:
-                t[1] = value
-                return
+                part = t
+                break
+        if part is not None:
+            s, v, i = part
+            self.partitions.remove(part)
+            self.partitions.append((s, value, i))
 
     def is_alone_on_level(self, var):
         return len(self.get_level_var(var)[0]) == 1
@@ -137,11 +155,18 @@ class AbsDomain:
     def is_separable(self, var):
         return len(self.get_entangled_with_var(var)) == 1
 
+    def get_value(self, var):
+        for t in self.partitions:
+            if var in t[0]:
+                return t[1]
+        return V.Bot
+
     def __get_max_index(self):
         return max(self.partitions, key=lambda x: x[2])[2]
 
     def __str__(self):
         return str(self.partitions)
+
     # s = '{'
     # if len(self.partitions) > 0:
     #     i = self.partitions[0][2]
@@ -153,147 +178,89 @@ class AbsDomain:
         return self.__str__()
 
 
-class old_AbsDomain:
-    def __init__(self):
-        self.partitions = []
-    def add_z_var(self, var):
-        self.partitions.append([FirstPartition(var, V.Z)])
-    def add_part(self, partition):
-        self.partitions.append(partition)
-    def get_second_part_from_var(self, var):
-        for partition in self.partitions:
-            for p in partition:
-                if p.is_in(var):
-                    return partition
-            # print()
-    def get_first_part_from_var(self, var):
-        for partition in self.partitions:
-            for p in partition:
-                if p.is_in(var):
-                    return p
-    def entangle(self, var1, var2):
-        p1 = self.get_second_part_from_var(var1)
-        p2 = self.get_second_part_from_var(var2)
-        if p1 != p2:
-            p1.extend(p2)
-            self.partitions.remove(p2)
-    def put_same_level(self, var1, var2):
-        self.entangle(var1, var2)
-        e = self.get_second_part_from_var(var2)
-        p1 = self.get_first_part_from_var(var1)
-        p2 = self.get_first_part_from_var(var2)
-        if p1 != p2:
-            p1.extend(p2)
-            e.remove(p2)
-    def dislevel(self, var):
-        if not self.is_alone_lv1(var):
-            p2 = self.get_second_part_from_var(var)
-            p1 = self.get_first_part_from_var(var)
-            p1.remove(var)
-            p2.append(FirstPartition(var, V.Bot))
-    def disentangle(self, var):
-        if not self.is_alone(var):
-            self.dislevel(var)
-            p2 = self.get_second_part_from_var(var)
-            p1 = self.get_first_part_from_var(var)
-            p2.remove(p1)
-            self.partitions.append([FirstPartition(var, V.Bot)])
-    def are_on_the_same_level(self, var1, var2):
-        p1 = self.get_first_part_from_var(var1)
-        p2 = self.get_first_part_from_var(var2)
-        return p1 == p2
-    def are_entangled(self, var1, var2):
-        p1 = self.get_second_part_from_var(var1)
-        p2 = self.get_second_part_from_var(var2)
-        return p1 == p2
-    def set_value(self, var, value):
-        p1 = self.get_first_part_from_var(var)
-        print(p1)
-        p1.value = value
-    def is_alone_lv2(self, var):
-        return len(self.get_second_part_from_var(var)) == 1
-    def is_alone_lv1(self, var):
-        return len(self.get_first_part_from_var(var)) == 1
-    def is_alone(self, var):
-        return len(self.get_second_part_from_var(var)) == 1 and len(self.get_first_part_from_var(var)) == 1
+def abs_t(abs_dom, var):
+    """
+    :type abs_dom: AbsDomain
+    """
+    in_val = abs_dom.get_value(var)
+
+    if in_val == V.Bot or in_val == V.Z or in_val == V.U or in_val == V.S or in_val == V.Top:
+        pass  # abs_dom.update_value(in_vars[0], val1)
+    elif in_val == V.X:
+        abs_dom.set_value(var, V.P)
+    elif in_val == V.P:
+        abs_dom.set_value(var, V.Y)
+    elif in_val == V.Y:
+        abs_dom.set_value(var, V.R)
+    elif in_val == V.R:
+        abs_dom.set_value(var, V.X)
 
 
-    def __str__(self):
-        s = '{'
-        for v in self.partitions:
-            s += f'{v}, '
-
-        return f'{s[:-2]}}}'
-
-    def __repr__(self):
-        return self.__str__()
-
-
-class FirstPartition:
-    def __init__(self, keys, value):
-        self.vars = keys
-        self.value = value
-
-    def is_in(self, var):
-        return var in self.vars
-
-    def extend(self, p):
-        self.vars.extend(p.vars)
-
-    def remove(self, var):
-        self.vars.remove(var)
-
-    def __len__(self):
-        return len(self.vars)
-
-    def __str__(self):
-        s = '('
-        for v in self.vars:
-            s += f'{v}-'
-        return f'{s[:-1]}):{self.value}'
-
-    def __repr__(self):
-        return self.__str__()
+def abs_h(abs_dom, var):
+    """
+    :type abs_dom: AbsDomain
+    """
+    in_val = abs_dom.get_value(var)
+    if len(abs_dom.get_entangled_with_var(var)) == 1:
+        if in_val == V.Bot or in_val == V.Y or in_val == V.Top:
+            pass  # abs_dom.update_value(in_vars[0], val1)
+        elif in_val == V.P or in_val == V.R:
+            abs_dom.set_value(var, V.S)
+        elif in_val == V.S or in_val == V.U:
+            abs_dom.set_value(var, V.Top)
+    else:
+        if in_val != V.Bot:
+            abs_dom.dislevel(var)
+            abs_dom.set_value(var, V.S)
 
 
-# E[¬q2] disentangle q2
-# E[∼q2] dislevel q2
-# E[q1 + q2] put on the same level
+def abs_cx(abs_dom, ctrl, trg):
+    """
+    :type abs_dom: AbsDomain
+    """
+    trg_val = abs_dom.get_value(trg)
+    ctrl_val = abs_dom.get_value(ctrl)
+    if trg_val == V.Bot or ctrl_val == V.Bot:
+        pass
+    elif len(abs_dom.get_entangled_with_var(trg)) == 1:
+        if ctrl_val == V.Z or trg_val == V.X:
+            pass  # abs_dom.update_value(in_vars[0], val1)
+        elif ctrl_val != V.Top and trg_val == V.Z:
+            abs_dom.put_same_level(ctrl, trg)
+            # abs_dom.set_value(trg, V.S)
+        else:
+            abs_dom.entangle(ctrl, trg)
+            abs_dom.set_value(trg, V.Top)
+    elif abs_dom.are_entangled(ctrl, trg):
+        if abs_dom.are_on_the_same_level(ctrl, trg):
+            abs_dom.disentangle(trg)
+            abs_dom.set_value(trg, V.Z)
+    else:
+        abs_dom.dislevel(trg)
+        abs_dom.set_value(trg, V.Top)
 
-# E[q1 ⊎ q2] ∪ e + K
-# E[q1 ∪ q2] entangled K
-# E(q) = {q, p} and E{q} = {q p, t}. K
+
+def abs_measure(abs_dom, var):
+    """
+    :type abs_dom: AbsDomain
+    """
+    in_val = abs_dom.get_value(var)
+    if in_val == V.Bot:
+        pass
+    elif len(abs_dom.get_entangled_with_var(var)) == 1:
+        abs_dom.set_value(var, V.Z)
+    else:
+        ent_vars = set.union(*(item[0] for item in abs_dom.get_entangled_with_var(var)))
+        same_level_vars = abs_dom.get_level_var(var)[0]
+        ent_vars.remove(var)
+        same_level_vars.remove(var)
+        for v in same_level_vars:
+            abs_dom.disentangle(v)
+            abs_dom.set_value(v, V.Z)
+        for v in ent_vars.difference(same_level_vars):
+            abs_dom.set_value(v, V.Top)
 
 
-e1 = FirstPartition(['x', 'y'], V.X)
-e2 = FirstPartition(['t'], V.Y)
 
-E = AbsDomain()
-# E.add_part([e1])
-E.add_part([e1, e2])
-print(E)
-E.add_z_var('z')
-print(E)
-# E.dislevel('y')
-# E.dislevel('t')
-
-# E.disentangle('y')
-E.disentangle('t')
-E.set_value('t', V.Z)
-
-# print(E.is_alone_lv1('z'))
-# print(E.is_alone_lv2('z'))
-# print(E.is_alone('z'))
-# print(E.is_alone_lv1('t'))
-# print(E.is_alone_lv2('t'))
-# print(E.is_alone('x'))
-# print(E.get_second_part_from_var('x'))
-# print(E.get_second_part_from_var('z'))
-# print(E.get_first_part_from_var('x'))
-# print(E.get_first_part_from_var('x') == E.get_first_part_from_var('y'))
-# print(E.get_first_part_from_var('z'))
-# print(E.are_entangled('t', 'z'))
-print(E)
-# print(E.are_entangled('x', 'y'))
-# print(E.are_entangled('x', 't'))
-# print(E)
+def lub_abs_dom(abs_dom1, abs_dom2):
+    pass
