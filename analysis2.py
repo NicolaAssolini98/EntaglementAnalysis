@@ -19,7 +19,7 @@ from cfg_build import NodeType, exit_node
 #     print = disable_print
 #
 
-class V(Enum):
+class Label(Enum):
     Bot = 1
     Z = 2
     X = 3
@@ -48,49 +48,55 @@ class bValue:
         return self.__str__()
 
     def compress(self):
-        if V.Bot in self.values and len(self.values) > 1:
-            self.values.discard(V.Bot)
+        if Label.Bot in self.values and len(self.values) > 1:
+            self.values.discard(Label.Bot)
 
-        if (V.Top in self.values or (V.U in self.values and V.Z in self.values)
-                or (V.S in self.values and V.Z in self.values)):
-            self.values = {V.Top}
+        if (Label.Top in self.values or (Label.U in self.values and Label.Z in self.values)
+                or (Label.S in self.values and Label.Z in self.values)):
+            self.values = {Label.Top}
 
 
 class AbsDomain:
     """
-    partitions: list of tuple (set of vars, label, index)
+    partitions: list of tuple (set of vars, index)
+    labeling: dict of {index: label}
     """
 
-    def __init__(self, partitions):
+    def __init__(self, partitions, labeling):
         if partitions is None:
             self.partitions = []
         else:
             self.partitions = partitions
+        if labeling is None:
+            self.labeling = dict()
+        else:
+            self.labeling = labeling
 
     def add_z_var(self, var):
         max_ind = self.__get_max_index()
-        self.partitions.append(({var}, V.Z, max_ind + 1))
+        self.partitions.append(({var}, max_ind + 1))
+        self.labeling[max_ind + 1] = Label.Z
 
     def get_level_var(self, var):
-        for (partition, label, index) in self.partitions:
+        for (partition, index) in self.partitions:
             if var in partition:
-                return partition, label, index
+                return partition, index
 
     def get_entangled_with_var(self, var):
-        _, _, index = self.get_level_var(var)
+        _, index = self.get_level_var(var)
         return [t for t in self.partitions if t[-1] == index]
 
     def entangle(self, var1, var2):
-        _, _, index1 = self.get_level_var(var1)
-        _, _, index2 = self.get_level_var(var2)
+        _, index1 = self.get_level_var(var1)
+        _, index2 = self.get_level_var(var2)
         parts = []
         for t in self.partitions:
             if t[-1] == index2:
                 parts.append(t)
         for part in parts:
-            s, v, i = part
+            s, i = part
             self.partitions.remove(part)
-            self.partitions.append((s, v, index1))
+            self.partitions.append((s, index1))
 
     def put_same_level(self, var1, var2):
         """
@@ -107,9 +113,9 @@ class AbsDomain:
         make var not at same level with other variables
         """
         if not self.is_alone_on_level(var):
-            part, label, index = self.get_level_var(var)
+            part, index = self.get_level_var(var)
             part.remove(var)
-            self.partitions.append(({var}, V.Bot, index))
+            self.partitions.append(({var}, index))
 
     def disentangle(self, var):
         """
@@ -124,9 +130,9 @@ class AbsDomain:
                     part = t
                     break
             if part is not None:
-                s, v, i = part
+                s, i = part
                 self.partitions.remove(part)
-                self.partitions.append((s, v, new_index))
+                self.partitions.append((s, new_index))
 
     def are_on_the_same_level(self, var1, var2):
         p1 = self.get_level_var(var1)
@@ -134,8 +140,8 @@ class AbsDomain:
         return p1 == p2
 
     def are_entangled(self, var1, var2):
-        _, _, index1 = self.get_level_var(var1)
-        _, _, index2 = self.get_level_var(var2)
+        _, index1 = self.get_level_var(var1)
+        _, index2 = self.get_level_var(var2)
         return index1 == index2
 
     def set_value(self, var, value):
@@ -145,9 +151,8 @@ class AbsDomain:
                 part = t
                 break
         if part is not None:
-            s, v, i = part
-            self.partitions.remove(part)
-            self.partitions.append((s, value, i))
+            s, i = part
+            self.labeling[i] = value
 
     def is_alone_on_level(self, var):
         return len(self.get_level_var(var)[0]) == 1
@@ -158,8 +163,14 @@ class AbsDomain:
     def get_value(self, var):
         for t in self.partitions:
             if var in t[0]:
-                return t[1]
-        return V.Bot
+                return self.labeling[t[1]]
+        return Label.Bot
+
+    def get_all_variables(self):
+        res = set()
+        for t in self.partitions:
+            res.update(t[0])
+        return res
 
     def __get_max_index(self):
         return max(self.partitions, key=lambda x: x[2])[2]
@@ -180,75 +191,80 @@ class AbsDomain:
 
 def abs_t(abs_dom, var):
     """
+    :type var: str
     :type abs_dom: AbsDomain
     """
     in_val = abs_dom.get_value(var)
 
-    if in_val == V.Bot or in_val == V.Z or in_val == V.U or in_val == V.S or in_val == V.Top:
+    if in_val == Label.Bot or in_val == Label.Z or in_val == Label.U or in_val == Label.S or in_val == Label.Top:
         pass  # abs_dom.update_value(in_vars[0], val1)
-    elif in_val == V.X:
-        abs_dom.set_value(var, V.P)
-    elif in_val == V.P:
-        abs_dom.set_value(var, V.Y)
-    elif in_val == V.Y:
-        abs_dom.set_value(var, V.R)
-    elif in_val == V.R:
-        abs_dom.set_value(var, V.X)
+    elif in_val == Label.X:
+        abs_dom.set_value(var, Label.P)
+    elif in_val == Label.P:
+        abs_dom.set_value(var, Label.Y)
+    elif in_val == Label.Y:
+        abs_dom.set_value(var, Label.R)
+    elif in_val == Label.R:
+        abs_dom.set_value(var, Label.X)
 
 
 def abs_h(abs_dom, var):
     """
+    :type var: str
     :type abs_dom: AbsDomain
     """
     in_val = abs_dom.get_value(var)
     if len(abs_dom.get_entangled_with_var(var)) == 1:
-        if in_val == V.Bot or in_val == V.Y or in_val == V.Top:
+        if in_val == Label.Bot or in_val == Label.Y or in_val == Label.Top:
             pass  # abs_dom.update_value(in_vars[0], val1)
-        elif in_val == V.P or in_val == V.R:
-            abs_dom.set_value(var, V.S)
-        elif in_val == V.S or in_val == V.U:
-            abs_dom.set_value(var, V.Top)
+        elif in_val == Label.P or in_val == Label.R:
+            abs_dom.set_value(var, Label.S)
+        elif in_val == Label.S or in_val == Label.U:
+            abs_dom.set_value(var, Label.Top)
     else:
-        if in_val != V.Bot:
+        if in_val != Label.Bot:
             abs_dom.dislevel(var)
-            abs_dom.set_value(var, V.S)
+            abs_dom.set_value(var, Label.S)
 
 
 def abs_cx(abs_dom, ctrl, trg):
     """
+    :type trg: str
+    :type ctrl: str
     :type abs_dom: AbsDomain
     """
     trg_val = abs_dom.get_value(trg)
     ctrl_val = abs_dom.get_value(ctrl)
-    if trg_val == V.Bot or ctrl_val == V.Bot:
+    if trg_val == Label.Bot or ctrl_val == Label.Bot:
         pass
     elif len(abs_dom.get_entangled_with_var(trg)) == 1:
-        if ctrl_val == V.Z or trg_val == V.X:
+        if ctrl_val == Label.Z or trg_val == Label.X:
             pass  # abs_dom.update_value(in_vars[0], val1)
-        elif ctrl_val != V.Top and trg_val == V.Z:
+        elif ctrl_val != Label.Top and trg_val == Label.Z:
             abs_dom.put_same_level(ctrl, trg)
             # abs_dom.set_value(trg, V.S)
         else:
             abs_dom.entangle(ctrl, trg)
-            abs_dom.set_value(trg, V.Top)
+            abs_dom.set_value(trg, Label.Top)
     elif abs_dom.are_entangled(ctrl, trg):
         if abs_dom.are_on_the_same_level(ctrl, trg):
             abs_dom.disentangle(trg)
-            abs_dom.set_value(trg, V.Z)
+            abs_dom.set_value(trg, Label.Z)
     else:
         abs_dom.dislevel(trg)
-        abs_dom.set_value(trg, V.Top)
+        abs_dom.set_value(trg, Label.Top)
 
 
 def abs_measure(abs_dom, var):
     """
+    :type var: str
     :type abs_dom: AbsDomain
     """
     in_val = abs_dom.get_value(var)
-    if in_val == V.Bot:
+    if in_val == Label.Bot:
         pass
     elif len(abs_dom.get_entangled_with_var(var)) == 1:
-        abs_dom.set_value(var, V.Z)
+        abs_dom.set_value(var, Label.Z)
     else:
         ent_vars = set.union(*(item[0] for item in abs_dom.get_entangled_with_var(var)))
         same_level_vars = abs_dom.get_level_var(var)[0]
@@ -256,11 +272,14 @@ def abs_measure(abs_dom, var):
         same_level_vars.remove(var)
         for v in same_level_vars:
             abs_dom.disentangle(v)
-            abs_dom.set_value(v, V.Z)
+            abs_dom.set_value(v, Label.Z)
         for v in ent_vars.difference(same_level_vars):
-            abs_dom.set_value(v, V.Top)
+            abs_dom.set_value(v, Label.Top)
 
 
 
 def lub_abs_dom(abs_dom1, abs_dom2):
+
+
+
     pass
