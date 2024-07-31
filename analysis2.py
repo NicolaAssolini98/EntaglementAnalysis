@@ -1,4 +1,5 @@
 import copy
+from collections import defaultdict
 from enum import Enum
 from functools import reduce
 
@@ -19,7 +20,7 @@ from cfg_build import NodeType, exit_node
 #     print = disable_print
 #
 
-class Label(Enum):
+class L(Enum):
     Bot = 1
     Z = 2
     X = 3
@@ -48,12 +49,12 @@ class bValue:
         return self.__str__()
 
     def compress(self):
-        if Label.Bot in self.values and len(self.values) > 1:
-            self.values.discard(Label.Bot)
+        if L.Bot in self.values and len(self.values) > 1:
+            self.values.discard(L.Bot)
 
-        if (Label.Top in self.values or (Label.U in self.values and Label.Z in self.values)
-                or (Label.S in self.values and Label.Z in self.values)):
-            self.values = {Label.Top}
+        if (L.Top in self.values or (L.U in self.values and L.Z in self.values)
+                or (L.S in self.values and L.Z in self.values)):
+            self.values = {L.Top}
 
 
 class AbsDomain:
@@ -75,7 +76,7 @@ class AbsDomain:
     def add_z_var(self, var):
         max_ind = self.__get_max_index()
         self.partitions.append(({var}, max_ind + 1))
-        self.labeling[max_ind + 1] = Label.Z
+        self.labeling[max_ind + 1] = L.Z
 
     def get_level_var(self, var):
         for (partition, index) in self.partitions:
@@ -164,9 +165,9 @@ class AbsDomain:
         for t in self.partitions:
             if var in t[0]:
                 return self.labeling[t[1]]
-        return Label.Bot
+        return L.Bot
 
-    def get_all_variables(self):
+    def get_all_vars(self):
         res = set()
         for t in self.partitions:
             res.update(t[0])
@@ -196,16 +197,16 @@ def abs_t(abs_dom, var):
     """
     in_val = abs_dom.get_value(var)
 
-    if in_val == Label.Bot or in_val == Label.Z or in_val == Label.U or in_val == Label.S or in_val == Label.Top:
+    if in_val == L.Bot or in_val == L.Z or in_val == L.U or in_val == L.S or in_val == L.Top:
         pass  # abs_dom.update_value(in_vars[0], val1)
-    elif in_val == Label.X:
-        abs_dom.set_value(var, Label.P)
-    elif in_val == Label.P:
-        abs_dom.set_value(var, Label.Y)
-    elif in_val == Label.Y:
-        abs_dom.set_value(var, Label.R)
-    elif in_val == Label.R:
-        abs_dom.set_value(var, Label.X)
+    elif in_val == L.X:
+        abs_dom.set_value(var, L.P)
+    elif in_val == L.P:
+        abs_dom.set_value(var, L.Y)
+    elif in_val == L.Y:
+        abs_dom.set_value(var, L.R)
+    elif in_val == L.R:
+        abs_dom.set_value(var, L.X)
 
 
 def abs_h(abs_dom, var):
@@ -215,16 +216,16 @@ def abs_h(abs_dom, var):
     """
     in_val = abs_dom.get_value(var)
     if len(abs_dom.get_entangled_with_var(var)) == 1:
-        if in_val == Label.Bot or in_val == Label.Y or in_val == Label.Top:
+        if in_val == L.Bot or in_val == L.Y or in_val == L.Top:
             pass  # abs_dom.update_value(in_vars[0], val1)
-        elif in_val == Label.P or in_val == Label.R:
-            abs_dom.set_value(var, Label.S)
-        elif in_val == Label.S or in_val == Label.U:
-            abs_dom.set_value(var, Label.Top)
+        elif in_val == L.P or in_val == L.R:
+            abs_dom.set_value(var, L.S)
+        elif in_val == L.S or in_val == L.U:
+            abs_dom.set_value(var, L.Top)
     else:
-        if in_val != Label.Bot:
+        if in_val != L.Bot:
             abs_dom.dislevel(var)
-            abs_dom.set_value(var, Label.S)
+            abs_dom.set_value(var, L.S)
 
 
 def abs_cx(abs_dom, ctrl, trg):
@@ -235,24 +236,25 @@ def abs_cx(abs_dom, ctrl, trg):
     """
     trg_val = abs_dom.get_value(trg)
     ctrl_val = abs_dom.get_value(ctrl)
-    if trg_val == Label.Bot or ctrl_val == Label.Bot:
+    if trg_val == L.Bot or ctrl_val == L.Bot:
         pass
     elif len(abs_dom.get_entangled_with_var(trg)) == 1:
-        if ctrl_val == Label.Z or trg_val == Label.X:
+        if ctrl_val == L.Z or trg_val == L.X:
             pass  # abs_dom.update_value(in_vars[0], val1)
-        elif ctrl_val != Label.Top and trg_val == Label.Z:
+        elif ctrl_val != L.Top and trg_val == L.Z:
             abs_dom.put_same_level(ctrl, trg)
             # abs_dom.set_value(trg, V.S)
         else:
             abs_dom.entangle(ctrl, trg)
-            abs_dom.set_value(trg, Label.Top)
+            abs_dom.set_value(trg, L.Top)
     elif abs_dom.are_entangled(ctrl, trg):
         if abs_dom.are_on_the_same_level(ctrl, trg):
             abs_dom.disentangle(trg)
-            abs_dom.set_value(trg, Label.Z)
+            abs_dom.set_value(trg, L.Z)
     else:
         abs_dom.dislevel(trg)
-        abs_dom.set_value(trg, Label.Top)
+        abs_dom.entangle(ctrl, trg)
+        abs_dom.set_value(trg, L.Top)
 
 
 def abs_measure(abs_dom, var):
@@ -261,10 +263,10 @@ def abs_measure(abs_dom, var):
     :type abs_dom: AbsDomain
     """
     in_val = abs_dom.get_value(var)
-    if in_val == Label.Bot:
+    if in_val == L.Bot:
         pass
     elif len(abs_dom.get_entangled_with_var(var)) == 1:
-        abs_dom.set_value(var, Label.Z)
+        abs_dom.set_value(var, L.Z)
     else:
         ent_vars = set.union(*(item[0] for item in abs_dom.get_entangled_with_var(var)))
         same_level_vars = abs_dom.get_level_var(var)[0]
@@ -272,14 +274,112 @@ def abs_measure(abs_dom, var):
         same_level_vars.remove(var)
         for v in same_level_vars:
             abs_dom.disentangle(v)
-            abs_dom.set_value(v, Label.Z)
+            abs_dom.set_value(v, L.Z)
         for v in ent_vars.difference(same_level_vars):
-            abs_dom.set_value(v, Label.Top)
+            abs_dom.set_value(v, L.Top)
 
+
+def merge_sets_by_index(list_of_tuples):
+    # Create a dictionary to hold sets by index
+    index_to_sets = defaultdict(set)
+
+    # Iterate over each tuple in the list
+    for s, index in list_of_tuples:
+        # Union the set to the corresponding index in the dictionary
+        index_to_sets[index].update(s)
+
+    # Convert the dictionary values to a list of sets
+    merged_sets = list(index_to_sets.values())
+
+    return merged_sets
+
+
+def merge_sets_with_common_elements(list_of_sets):
+    # Set to store the merged sets
+    fixpoint = False
+    while not fixpoint:
+        # old_sets = copy.deepcopy(list_of_sets)
+        # old_sets = copy.deepcopy(list_of_sets)
+        merged_sets = []
+        # Loop through each set in the list
+        for s in list_of_sets:
+            # Check if the set has elements in common with any other merged set
+            for m in merged_sets:
+                if s & m:
+                    # Merge the set with the other set
+                    m |= s
+                    break
+            else:
+                # If the set has no elements in common with any other merged set, add it to the merged sets
+                merged_sets.append(s)
+
+        fixpoint = (merged_sets == list_of_sets)
+        list_of_sets = merged_sets
+    return list_of_sets
 
 
 def lub_abs_dom(abs_dom1, abs_dom2):
+    """
+    :type abs_dom1: AbsDomain
+    :type abs_dom2: AbsDomain
+    """
+    # Intersect same level vars
+    tuples1 = abs_dom1.partitions
+    list1 = [t[0] for t in tuples1]
+    tuples2 = abs_dom2.partitions
+    list2 = [t[0] for t in tuples2]
 
+    # Initialize a list to hold the intersections
+    intersections = []
+    # Initialize a set to track elements in intersections
+    intersected_elements = set()
 
+    # Iterate over each set in the first list
+    for set1 in list1:
+        # Iterate over each set in the second list
+        for set2 in list2:
+            # Compute the intersection
+            intersection = set1 & set2
+            # If the intersection is not empty, add it to the result list
+            if intersection:
+                intersections.append(intersection)
+                intersected_elements.update(intersection)
 
+    # Collect singletons for elements not in any intersection
+    all_vars = set().union(*list1, *list2)
+    non_intersected_elements = all_vars - intersected_elements
+    singletons = [{e} for e in non_intersected_elements]
+
+    # Combine the intersections and singletons
+    part = intersections + singletons
+
+    # Create a dictionary to hold sets by index
+    e_1 = merge_sets_by_index(tuples1)
+    e_2 = merge_sets_by_index(tuples2)
+    e_merged = merge_sets_with_common_elements(e_1 + e_2)
+
+    e_with_index = [(s, i) for i, s in enumerate(e_merged, start=0)]
+
+    res = []
+    for p in part:
+        v = next(iter(p))
+        for s, i in e_with_index:
+            if v in s:
+                res.append((p, i))
+                break
+
+    # Computes the lub between labels
+    store = {}
+    for s, i in e_with_index:
+        labels = set()
+        for v in abs_dom1.get_all_vars():
+            if v in s:
+                labels.add(abs_dom1.get_value(v))
+        for v in abs_dom2.get_all_vars():
+            if v in s:
+                labels.add(abs_dom2.get_value(v))
+        # TODO lub tra le labels
+        store[i] = labels
+    return res, store
     pass
+
