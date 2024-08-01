@@ -1,0 +1,33 @@
+
+// qAce level 1 grammar
+?start: (_NEWLINE | stmt )*
+
+//expression:
+    //statements
+    h_stmt: "h" "(" name ")"
+    t_stmt: "t" "(" name ")"
+    cx_stmt: "cx" "(" name "," name ")"
+
+    //control statements
+    if_stmt: "if" name ":" body ["else" ":" body]//(elif)* [else]
+    else: "else" ":" body
+    while_stmt: "while" name ":" body //["else" ":" suite]
+
+
+?stmt: simple_stmt | compound_stmt
+?simple_stmt: h_stmt | cx_stmt | t_stmt | pass_stmt
+?compound_stmt: if_stmt | while_stmt
+body: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
+
+?name: NAME
+
+// Terminals
+_NEWLINE: ( /\r?\n[\t ]*/ | COMMENT )+
+
+%ignore /[\t \f]+/  // WS
+%ignore /\\[\t \f]*\r?\n/   // LINE_CONT
+%ignore COMMENT
+%declare _INDENT _DEDENT
+NAME: /[^\W\d]\w*/
+COMMENT: /#[^\n]*/
+

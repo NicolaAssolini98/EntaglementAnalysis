@@ -1,11 +1,8 @@
-import copy
 from collections import defaultdict
 from enum import Enum
 from functools import reduce
 
 import networkx as nx
-
-from cfg_build import NodeType, exit_node
 
 
 # To disable debug print in this file
@@ -32,29 +29,22 @@ class L(Enum):
     Top = 9
 
 
-class bValue:
-    def __init__(self, values=None):
-        if values is None:
-            self.values = set()
-        else:
-            self.values = values
-
-    def __str__(self):
-        s = ''
-        for v in self.values:
-            s += f'{v}'
-        return f'{s[:-1]}):{self.values}'
-
-    def __repr__(self):
-        return self.__str__()
-
-    def compress(self):
-        if L.Bot in self.values and len(self.values) > 1:
-            self.values.discard(L.Bot)
-
-        if (L.Top in self.values or (L.U in self.values and L.Z in self.values)
-                or (L.S in self.values and L.Z in self.values)):
-            self.values = {L.Top}
+order_L = [
+    (L.Bot, L.X),
+    (L.Bot, L.P),
+    (L.Bot, L.Y),
+    (L.Bot, L.R),
+    (L.Bot, L.Z),
+    (L.X, L.U),
+    (L.P, L.U),
+    (L.Y, L.U),
+    (L.R, L.U),
+    (L.U, L.S),
+    (L.S, L.Top),
+    (L.Z, L.Top)
+]
+lattice = nx.DiGraph()
+lattice.add_edges_from(order_L)
 
 
 class AbsDomain:
@@ -318,6 +308,38 @@ def merge_sets_with_common_elements(list_of_sets):
     return list_of_sets
 
 
+def lub_labels(val1, val2):
+    queue1 = [val1]
+    queue2 = [val2]
+
+    # Inizializza un insieme per tenere traccia dei nodi visitati
+    visited1 = set()
+    visited2 = set()
+
+    # Continua la BFS finché ci sono nodi nella coda
+    while queue1 or queue2:
+        if queue1:
+            current_node1 = queue1.pop(0)
+            visited1.add(current_node1)
+            neighbors1 = list(lattice.neighbors(current_node1))
+            for neighbor in neighbors1:
+                if neighbor not in visited1:
+                    queue1.append(neighbor)
+        if queue2:
+            current_node2 = queue2.pop(0)
+            visited2.add(current_node2)
+            neighbors2 = list(lattice.neighbors(current_node2))
+            for neighbor in neighbors2:
+                if neighbor not in visited2:
+                    queue2.append(neighbor)
+
+        intersection = visited1 & visited2
+        if intersection:
+            return intersection.pop()
+
+    return L.Bot
+
+
 def lub_abs_dom(abs_dom1, abs_dom2):
     """
     :type abs_dom1: AbsDomain
@@ -379,7 +401,8 @@ def lub_abs_dom(abs_dom1, abs_dom2):
             if v in s:
                 labels.add(abs_dom2.get_value(v))
         # TODO lub tra le labels
-        store[i] = labels
+        store[i] = reduce(lambda x, y: lub_labels(x, y), labels)
+
     return res, store
     pass
 

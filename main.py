@@ -1,7 +1,13 @@
 from analysis2 import *
+from lark import Lark
+from lark.indenter import PythonIndenter
 
-a1 = AbsDomain([({'a', 'b', 'c'}, 0), ({'d'}, 0)], {0: L.X})
-a2 = AbsDomain([({'a', 'b'}, 0), ({'e'}, 1)], {0: L.Y, 1: L.S})
 
-r = lub_abs_dom(a1, a2)
-print(r)
+kwargs = dict(postlex=PythonIndenter())
+parser = Lark.open("lark/grammar_l1.lark", rel_to=__file__, parser="lalr", **kwargs)
+
+
+
+# t = parser.parse(text)
+# print(t)
+# print(t.pretty())

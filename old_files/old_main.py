@@ -1,8 +1,8 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from cfg_build import build_cfg, print_cfg
-from parser import obtain_function, clean_empty_line_and_comment
+from cfg_build_old import build_cfg, print_cfg
+from parser_old import obtain_function, clean_empty_line_and_comment
 from analysis import (consumption_analysis, entaglement_analysis, liveness_analysis, check_dupl_over,
                       insert_uncomputation, insert_discard)
 
@@ -36,7 +36,7 @@ tutte le variabili classiche devono essere segnate come '_', così da essere ign
 considero un cfg semplificato, quindi niente break o continue
 """
 
-file_path = 'txt_files/test_2'
+file_path = '../txt_files/test_2'
 # file_path = 'txt_files/test_entangled'
 tag = '@guppy'
 groups = obtain_function(file_path)

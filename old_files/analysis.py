@@ -4,7 +4,7 @@ from functools import reduce
 
 import networkx as nx
 
-from cfg_build import NodeType, exit_node
+from cfg_build_old import NodeType, exit_node
 
 # To disable debug print in this file
 debug = True
