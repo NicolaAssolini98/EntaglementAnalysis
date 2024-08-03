@@ -1,19 +1,19 @@
 
-// qAce level 1 grammar
-?start: (_NEWLINE | stmt )*
+?start: (_NEWLINE)* decl (_NEWLINE | stmt+)*
 
 //expression:
     //statements
-    h_stmt: "h" "(" name ")"
-    t_stmt: "t" "(" name ")"
-    cx_stmt: "cx" "(" name "," name ")"
+    h_stmt: "h" "(" name ")" _NEWLINE
+    t_stmt: "t" "(" name ")" _NEWLINE
+    cx_stmt: "cx" "(" name "," name ")" _NEWLINE
+    pass_stmt: "skip" _NEWLINE
 
     //control statements
     if_stmt: "if" name ":" body ["else" ":" body]//(elif)* [else]
     else: "else" ":" body
     while_stmt: "while" name ":" body //["else" ":" suite]
 
-
+decl: "[" name ("," name)* "]" _NEWLINE
 ?stmt: simple_stmt | compound_stmt
 ?simple_stmt: h_stmt | cx_stmt | t_stmt | pass_stmt
 ?compound_stmt: if_stmt | while_stmt
