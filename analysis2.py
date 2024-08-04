@@ -400,9 +400,8 @@ def lub_abs_dom(abs_dom1, abs_dom2):
         for v in abs_dom2.get_all_vars():
             if v in s:
                 labels.add(abs_dom2.get_value(v))
-        # TODO lub tra le labels
         store[i] = reduce(lambda x, y: lub_labels(x, y), labels)
 
     return res, store
-    pass
+
 

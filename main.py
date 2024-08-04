@@ -8,19 +8,25 @@ kwargs = dict(postlex=PythonIndenter())
 parser = Lark.open("lark/grammar_l1.lark", rel_to=__file__, parser="lalr", **kwargs)
 
 text = '''
-[a,b,c,d,e]
+[a]#b,c,d,e]
 # cx(a,b)
-skip
+# skip
+# h(d)
+# t(e)
 # if a:
 #     t(b)
 # else:
 #     h(b)
-# while c:
-#     h(c)
+while c:
+    h(c)
+    t(c)
 '''
 
 
 t = parser.parse(text)
 print(t)
 print(t.pretty())
-print(init_cfg(t))
+decl_vars, cfg = init_cfg(t)
+print(decl_vars)
+print(cfg)
+print_cfg(cfg)
