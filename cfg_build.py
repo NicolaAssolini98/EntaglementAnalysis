@@ -89,8 +89,7 @@ def extract_sub_graph(cfg, sub_tree, head_node, end_node):
             branch_end_nodes = [node for node in branch_cfg.nodes if branch_cfg.out_degree(node) == 0]
             cfg = nx.compose(cfg, branch_cfg)
             for branch_end_node in branch_end_nodes:
-                if branch_end_node != exit_node:
-                    cfg = nx.relabel_nodes(cfg, {branch_end_node: end_node})
+                cfg = nx.relabel_nodes(cfg, {branch_end_node: end_node})
 
             return cfg
 
@@ -140,13 +139,12 @@ def init_cfg(ast):
             graph = nx.DiGraph()
             p_vars = get_variables(ast.children[0])
             graph.add_node(start_node)
+            graph = build_graph(ast.children[1:], graph, start_node)
 
-            # for c in ast.children[1:]:
-            #     print('...')
-            #     print(c.pretty())
-            #     print(c)
-            #     print('----')
+            end_node = [node for node in graph.nodes if graph.out_degree(node) == 0]
+            if len(end_node) != 1:
+                exit('Bad shaped CFG')
+            graph = nx.relabel_nodes(graph, {end_node[0]: exit_node})
 
-            return p_vars, build_graph(ast.children[1:], graph, start_node)
-
+            return p_vars, graph
     exit('Invalid AST')

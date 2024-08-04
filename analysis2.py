@@ -1,6 +1,8 @@
+import copy
 from collections import defaultdict
 from enum import Enum
 from functools import reduce
+from cfg_build import start_node, NodeType, EdgeLabel
 
 import networkx as nx
 
@@ -47,13 +49,13 @@ lattice = nx.DiGraph()
 lattice.add_edges_from(order_L)
 
 
-class AbsDomain:
+class AbsState:
     """
     partitions: list of tuple (set of vars, index)
     labeling: dict of {index: label}
     """
 
-    def __init__(self, partitions, labeling):
+    def __init__(self, partitions=None, labeling=None):
         if partitions is None:
             self.partitions = []
         else:
@@ -74,6 +76,7 @@ class AbsDomain:
                 return partition, index
 
     def get_entangled_with_var(self, var):
+
         _, index = self.get_level_var(var)
         return [t for t in self.partitions if t[-1] == index]
 
@@ -163,11 +166,18 @@ class AbsDomain:
             res.update(t[0])
         return res
 
+    def copy(self):
+        return AbsState(copy.deepcopy(self.partitions), copy.deepcopy(self.labeling))
+
     def __get_max_index(self):
-        return max(self.partitions, key=lambda x: x[2])[2]
+        m = 0
+        for (partition, index) in self.partitions:
+            if m < index:
+                m = index
+        return m
 
     def __str__(self):
-        return str(self.partitions)
+        return f'-----\n{str(self.partitions)}\n{str(self.labeling)}\n-----'
 
     # s = '{'
     # if len(self.partitions) > 0:
@@ -183,7 +193,7 @@ class AbsDomain:
 def abs_t(abs_dom, var):
     """
     :type var: str
-    :type abs_dom: AbsDomain
+    :type abs_dom: AbsState
     """
     in_val = abs_dom.get_value(var)
 
@@ -198,11 +208,13 @@ def abs_t(abs_dom, var):
     elif in_val == L.R:
         abs_dom.set_value(var, L.X)
 
+    return abs_dom
+
 
 def abs_h(abs_dom, var):
     """
     :type var: str
-    :type abs_dom: AbsDomain
+    :type abs_dom: AbsState
     """
     in_val = abs_dom.get_value(var)
     if len(abs_dom.get_entangled_with_var(var)) == 1:
@@ -217,12 +229,14 @@ def abs_h(abs_dom, var):
             abs_dom.dislevel(var)
             abs_dom.set_value(var, L.S)
 
+    return abs_dom
+
 
 def abs_cx(abs_dom, ctrl, trg):
     """
     :type trg: str
     :type ctrl: str
-    :type abs_dom: AbsDomain
+    :type abs_dom: AbsState
     """
     trg_val = abs_dom.get_value(trg)
     ctrl_val = abs_dom.get_value(ctrl)
@@ -246,11 +260,13 @@ def abs_cx(abs_dom, ctrl, trg):
         abs_dom.entangle(ctrl, trg)
         abs_dom.set_value(trg, L.Top)
 
+    return abs_dom
+
 
 def abs_measure(abs_dom, var):
     """
     :type var: str
-    :type abs_dom: AbsDomain
+    :type abs_dom: AbsState
     """
     in_val = abs_dom.get_value(var)
     if in_val == L.Bot:
@@ -267,6 +283,8 @@ def abs_measure(abs_dom, var):
             abs_dom.set_value(v, L.Z)
         for v in ent_vars.difference(same_level_vars):
             abs_dom.set_value(v, L.Top)
+
+    return abs_dom
 
 
 def merge_sets_by_index(list_of_tuples):
@@ -342,8 +360,8 @@ def lub_labels(val1, val2):
 
 def lub_abs_dom(abs_dom1, abs_dom2):
     """
-    :type abs_dom1: AbsDomain
-    :type abs_dom2: AbsDomain
+    :type abs_dom1: AbsState
+    :type abs_dom2: AbsState
     """
     # Intersect same level vars
     tuples1 = abs_dom1.partitions
@@ -404,4 +422,42 @@ def lub_abs_dom(abs_dom1, abs_dom2):
 
     return res, store
 
+# TODO buggato
+def entanglement_analysis(all_vars, cfg):
+    abs_states = {node: AbsState() for node in cfg.nodes()}
+    initial_state = AbsState()
+    for v in all_vars:
+        initial_state.add_z_var(v)
+    abs_states[start_node] = initial_state
+    print(initial_state)
 
+    fixpoint = False
+    while not fixpoint:
+        old_states = {node: abs_states[node].copy() for node in abs_states.keys()}
+        for node in cfg.nodes():
+            temp_abs_states = []
+            predecessors = list(cfg.predecessors(node))
+            for pred in predecessors:
+                label = cfg[pred][node]["label"]
+                """
+                :type label: EdgeLabel
+                """
+                if label.type == NodeType.H:
+                    temp_abs_states.append(abs_h(old_states[pred], label.value[0]))
+                elif label.type == NodeType.T:
+                    temp_abs_states.append(abs_t(old_states[pred], label.value[0]))
+                elif label.type == NodeType.CX:
+                    temp_abs_states.append(abs_cx(old_states[pred], label.value[0], label.value[1]))
+                elif label.type == NodeType.NonZero or label.type == NodeType.Zero:
+                    temp_abs_states.append(abs_measure(old_states[pred], label.value[0]))
+
+            if len(temp_abs_states) > 0:
+                abs_states[node] = reduce(lambda x, y: lub_abs_dom(x, y), temp_abs_states)
+            elif node == start_node:
+                abs_states[node] = initial_state
+            else:
+                abs_states[node] = AbsState()
+
+        fixpoint = old_states == abs_states
+
+    return abs_states

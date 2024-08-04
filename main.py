@@ -8,8 +8,8 @@ kwargs = dict(postlex=PythonIndenter())
 parser = Lark.open("lark/grammar_l1.lark", rel_to=__file__, parser="lalr", **kwargs)
 
 text = '''
-[a]#b,c,d,e]
-# cx(a,b)
+[a,b,c] #,d,e]
+cx(a,b)
 # skip
 # h(d)
 # t(e)
@@ -29,4 +29,5 @@ print(t.pretty())
 decl_vars, cfg = init_cfg(t)
 print(decl_vars)
 print(cfg)
-print_cfg(cfg)
+# print_cfg(cfg)
+entanglement_analysis(decl_vars, cfg)
