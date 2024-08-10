@@ -1,11 +1,15 @@
-from analysis2 import AbsState, L
+from analysis2 import *
 
-
+b = AbsState()
+for v in {'a','b'}:
+    b.add_z_var(str(v))
 a = AbsState()
-print(a)
-for v in {'a','b','c','d'}:
-    a.add_z_var(v)
 
-print(a)
+c = lub_abs_dom(b,a)
+print(c)
+d = lub_abs_dom(a,b)
+print(d)
+
+
 
 
