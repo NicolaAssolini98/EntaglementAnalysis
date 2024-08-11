@@ -26,9 +26,8 @@ class L(Enum):
     Y = 4
     R = 5
     P = 6
-    U = 7
-    S = 8
-    Top = 9
+    S = 7
+    Top = 8
 
 
 order_L = [
@@ -37,11 +36,10 @@ order_L = [
     (L.Bot, L.Y),
     (L.Bot, L.R),
     (L.Bot, L.Z),
-    (L.X, L.U),
-    (L.P, L.U),
-    (L.Y, L.U),
-    (L.R, L.U),
-    (L.U, L.S),
+    (L.X, L.S),
+    (L.P, L.S),
+    (L.Y, L.S),
+    (L.R, L.S),
     (L.S, L.Top),
     (L.Z, L.Top)
 ]
@@ -80,8 +78,12 @@ class AbsState:
         r = self.get_level_var(var)
         if r is not None:
             _, index = r
-            return [t for t in self.partitions if t[-1] == index]
-        return []
+            res = set()
+            for t in self.partitions:
+                if t[-1] == index:
+                    res.update(t[0])
+            return res
+        return set()
 
     def entangle(self, var1, var2):
         _, index1 = self.get_level_var(var1)
@@ -95,7 +97,6 @@ class AbsState:
             self.partitions.remove(part)
             self.partitions.append((s, index1))
         self.labeling.pop(index2)
-
 
     def put_same_level(self, var1, var2):
         """
@@ -143,6 +144,7 @@ class AbsState:
     def are_entangled(self, var1, var2):
         _, index1 = self.get_level_var(var1)
         _, index2 = self.get_level_var(var2)
+        print(f'p: {index1, index2}')
         return index1 == index2
 
     def set_value(self, var, value):
@@ -197,16 +199,13 @@ class AbsState:
 
     def __eq__(self, other):
         if self.partitions != other.partitions:
-            print('part diverse')
             return False
         indexes_self = self.get_all_indexes()
         indexes_other = other.get_all_indexes()
         if indexes_self != indexes_other:
-            print('lab not equal')
             return False
         for i in indexes_self:
             if self.labeling[i] != other.labeling[i]:
-                print('lab not equal')
                 return False
         return True
 
@@ -219,7 +218,7 @@ def abs_t(abs_dom, var):
     abs_dom_1 = abs_dom.copy()
     in_val = abs_dom_1.get_value(var)
 
-    if in_val == L.Bot or in_val == L.Z or in_val == L.U or in_val == L.S or in_val == L.Top:
+    if in_val == L.Bot or in_val == L.Z or in_val == L.S or in_val == L.Top:
         pass  # abs_dom.update_value(in_vars[0], val1)
     elif in_val == L.X:
         abs_dom_1.set_value(var, L.P)
@@ -252,7 +251,7 @@ def abs_h(abs_dom, var):
             abs_dom_1.set_value(var, L.Z)
         elif in_val == L.P or in_val == L.R:
             abs_dom_1.set_value(var, L.S)
-        elif in_val == L.S or in_val == L.U:
+        elif in_val == L.S:
             abs_dom_1.set_value(var, L.Top)
     else:
         if in_val != L.Bot:
@@ -283,6 +282,7 @@ def abs_cx(abs_dom, ctrl, trg):
             abs_dom_1.entangle(ctrl, trg)
             abs_dom_1.set_value(trg, L.Top)
     elif abs_dom_1.are_entangled(ctrl, trg):
+        print('qua')
         if abs_dom_1.are_on_the_same_level(ctrl, trg):
             abs_dom_1.disentangle(trg)
             abs_dom_1.set_value(trg, L.Z)
@@ -306,8 +306,8 @@ def abs_measure(abs_dom, var):
     elif len(abs_dom_1.get_entangled_with_var(var)) == 1:
         abs_dom_1.set_value(var, L.Z)
     else:
-        ent_vars = set.union(*(item[0] for item in abs_dom_1.get_entangled_with_var(var)))
-        same_level_vars = abs_dom_1.get_level_var(var)[0]
+        ent_vars = abs_dom_1.get_entangled_with_var(var)
+        same_level_vars = abs_dom_1.get_level_var(var)[0].copy()
         ent_vars.remove(var)
         same_level_vars.remove(var)
         for v in same_level_vars:
@@ -315,6 +315,9 @@ def abs_measure(abs_dom, var):
             abs_dom_1.set_value(v, L.Z)
         for v in ent_vars.difference(same_level_vars):
             abs_dom_1.set_value(v, L.Top)
+
+        abs_dom_1.disentangle(var)
+        abs_dom_1.set_value(var, L.Z)
 
     return abs_dom_1
 
@@ -437,6 +440,7 @@ def lub_abs_dom(abs_dom1, abs_dom2):
     e_2 = merge_sets_by_index(tuples2)
     e_merged = merge_sets_with_common_elements(e_1 + e_2)
 
+    # Create the set correspondig to non-separable variables
     e_with_index = [(s, i) for i, s in enumerate(e_merged, start=0)]
 
     res = []
@@ -449,14 +453,21 @@ def lub_abs_dom(abs_dom1, abs_dom2):
 
     # Computes the lub between labels
     store = {}
+
     for s, i in e_with_index:
         labels = set()
         for v in abs_dom1.get_all_vars():
             if v in s:
-                labels.add(abs_dom1.get_value(v))
+                if s == abs_dom1.get_entangled_with_var(v):
+                    labels.add(abs_dom1.get_value(v))
+                else:
+                    labels.add(L.Top)
         for v in abs_dom2.get_all_vars():
             if v in s:
-                labels.add(abs_dom2.get_value(v))
+                if s == abs_dom2.get_entangled_with_var(v):
+                    labels.add(abs_dom2.get_value(v))
+                else:
+                    labels.add(L.Top)
         store[i] = reduce(lambda x, y: lub_labels(x, y), labels)
 
     return AbsState(res, store)
@@ -473,7 +484,7 @@ def entanglement_analysis(all_vars, cfg):
     fixpoint = False
     # i = 0
     while not fixpoint:
-#         i += 1
+        #         i += 1
         old_states = {node: abs_states[node].copy() for node in abs_states.keys()}
         for node in cfg.nodes():
             n = node

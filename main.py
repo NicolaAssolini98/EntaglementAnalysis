@@ -8,17 +8,30 @@ kwargs = dict(postlex=PythonIndenter())
 parser = Lark.open("lark/grammar_l1.lark", rel_to=__file__, parser="lalr", **kwargs)
 
 text = '''
-[c,a] #,d,e]
+[a,b,c]
+h(a)
+cx(a,c)
+h(a)
+cx(c,b)
+# t(b)
+# cx(c,a)
+if b:
+    skip
+'''
+
+
+'''
+[c,a,b] #,d,e]
 skip
 while c:
     h(a)
     # skip
 # t(a)
 cx(a,c)
-
 '''
 
 
+print(text)
 t = parser.parse(text)
 # print(t)
 # print(t.pretty())
