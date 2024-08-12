@@ -1,0 +1,9 @@
+[a,b,c]
+h(a)
+cx(a,c)
+h(a)
+cx(c,b)
+# t(b)
+# cx(c,a)
+if b:
+    skip

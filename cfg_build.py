@@ -64,6 +64,11 @@ def new_node():
     return node
 
 
+def reset_count():
+    global node_count
+    node_count = 1
+
+
 def get_variables(tree):
     """
     :type tree: Tree
@@ -136,6 +141,7 @@ def build_graph(trees, cfg, prev_node):
 def init_cfg(ast):
     if isinstance(ast, Tree):
         if ast.data == 'start':
+            reset_count()
             graph = nx.DiGraph()
             p_vars = get_variables(ast.children[0])
             graph.add_node(start_node)
