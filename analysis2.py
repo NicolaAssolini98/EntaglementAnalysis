@@ -474,6 +474,11 @@ def lub_abs_dom(abs_dom1, abs_dom2):
 
 
 def entanglement_analysis(all_vars, cfg):
+    """
+    :param all_vars: list of all program variables
+    :param cfg: networkx graph representing the CFG
+    :return: a dictionary representing for each node in the CFG the abstract state
+    """
     abs_states = {node: AbsState() for node in cfg.nodes()}
     initial_state = AbsState()
     for v in all_vars:

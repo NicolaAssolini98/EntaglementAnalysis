@@ -92,9 +92,6 @@ def extract_sub_graph(cfg, sub_tree, head_node, end_node):
 
 
 def build_graph(trees, cfg, prev_node):
-    """
-    :return:
-    """
     if len(trees) == 0:
         return cfg
 
@@ -128,7 +125,12 @@ def build_graph(trees, cfg, prev_node):
     return build_graph(trees[1:], cfg, end_node)
 
 
-def init_cfg(ast):
+def cfg_from_ast(ast):
+    """
+    :param ast: lark Abstract Syntax Tree
+    :return: a pair (p_vars, graph) where p_vars is a list of strings representing the defined variables
+    and graph is a networkx graph representing the CFG
+    """
     if isinstance(ast, Tree):
         if ast.data == 'start':
             reset_count()
