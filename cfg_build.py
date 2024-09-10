@@ -1,4 +1,3 @@
-import re
 from enum import Enum
 
 import networkx as nx
@@ -11,15 +10,6 @@ pattern_measure = r'\w'
 node_count = 1
 exit_node = 'Exit'
 start_node = 'Start'
-
-"""
-P(q)∣
-∣ P(¬q) ∣
-∣ skip ∣
-∣ h(q)∣
-∣ t(q)∣
-∣ cx(q, t) 
-"""
 
 
 class NodeType(Enum):

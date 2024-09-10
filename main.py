@@ -9,28 +9,6 @@ from lark.indenter import PythonIndenter
 kwargs = dict(postlex=PythonIndenter())
 parser = Lark.open("lark/grammar_l1.lark", rel_to=__file__, parser="lalr", **kwargs)
 
-text = '''
-[a,b,c]
-h(a)
-cx(a,c)
-h(a)
-cx(c,b)
-# t(b)
-# cx(c,a)
-if b:
-    skip
-'''
-
-
-'''
-[c,a,b] #,d,e]
-skip
-while c:
-    h(a)
-    # skip
-# t(a)
-cx(a,c)
-'''
 
 test_folder_path = 'txt_files'
 test_files = os.listdir(test_folder_path)

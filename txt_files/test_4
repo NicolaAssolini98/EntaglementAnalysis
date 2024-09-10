@@ -1,0 +1,7 @@
+[a,b,c]
+h(a)
+cx(a, b)
+cx(a, c)
+cx(c, b)
+t(b)
+cx(c, a)

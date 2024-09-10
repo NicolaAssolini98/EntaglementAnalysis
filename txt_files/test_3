@@ -1,0 +1,8 @@
+[a,b,c]
+h(a)
+cx(a, b)
+h(c)
+if b:
+    cx(a, c)
+else:
+    cx(c, b)
