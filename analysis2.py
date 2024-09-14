@@ -7,18 +7,6 @@ from cfg_build import start_node, NodeType, EdgeLabel
 import networkx as nx
 
 
-# To disable debug print in this file
-# debug = True
-#
-#
-# def disable_print(*args, **kwargs):
-#     pass
-#
-#
-# if not debug:
-#     print = disable_print
-#
-
 class L(Enum):
     Bot = 1
     Z = 2
@@ -74,7 +62,6 @@ class AbsState:
                 return partition, index
 
     def get_entangled_with_var(self, var):
-        # print(f'p: {self.get_level_var(var)}')
         r = self.get_level_var(var)
         if r is not None:
             _, index = r
@@ -144,7 +131,7 @@ class AbsState:
     def are_entangled(self, var1, var2):
         _, index1 = self.get_level_var(var1)
         _, index2 = self.get_level_var(var2)
-        print(f'p: {index1, index2}')
+        # print(f'p: {index1, index2}')
         return index1 == index2
 
     def set_value(self, var, value):
@@ -241,10 +228,10 @@ def abs_h(abs_dom, var):
     in_val = abs_dom_1.get_value(var)
     # print(f'p: {abs_dom.get_entangled_with_var(var)}')
     if in_val == L.Bot:
-        pass  # abs_dom.update_value(in_vars[0], val1)
+        pass
     elif len(abs_dom_1.get_entangled_with_var(var)) == 1:
         if in_val == L.Y or in_val == L.Top:
-            pass  # abs_dom.update_value(in_vars[0], val1)
+            pass
         elif in_val == L.Z:
             abs_dom_1.set_value(var, L.X)
         elif in_val == L.X:
@@ -261,6 +248,22 @@ def abs_h(abs_dom, var):
     return abs_dom_1
 
 
+def abs_x(abs_dom, var):
+    """
+    :type var: str
+    :type abs_dom: AbsState
+    """
+    abs_dom_1 = abs_dom.copy()
+    in_val = abs_dom_1.get_value(var)
+
+    if in_val == L.Bot or in_val == L.Z or in_val == L.Y or in_val == L.X or in_val == L.S or in_val == L.Top:
+        pass
+    elif in_val == L.P or in_val == L.R:
+        abs_dom_1.set_value(var, L.S)
+
+    return abs_dom_1
+
+
 def abs_cx(abs_dom, ctrl, trg):
     """
     :type trg: str
@@ -270,10 +273,10 @@ def abs_cx(abs_dom, ctrl, trg):
     abs_dom_1 = abs_dom.copy()
     trg_val = abs_dom_1.get_value(trg)
     ctrl_val = abs_dom_1.get_value(ctrl)
-    if trg_val == L.Bot or ctrl_val == L.Bot:
+    if trg_val == L.Bot or ctrl_val == L.Bot or ctrl_val == L.Z:
         pass
     elif len(abs_dom_1.get_entangled_with_var(trg)) == 1:
-        if ctrl_val == L.Z or trg_val == L.X:
+        if trg_val == L.X:
             pass  # abs_dom.update_value(in_vars[0], val1)
         elif ctrl_val != L.Top and trg_val == L.Z:
             abs_dom_1.put_same_level(ctrl, trg)
@@ -281,11 +284,9 @@ def abs_cx(abs_dom, ctrl, trg):
         else:
             abs_dom_1.entangle(ctrl, trg)
             abs_dom_1.set_value(trg, L.Top)
-    elif abs_dom_1.are_entangled(ctrl, trg):
-        print('qua')
-        if abs_dom_1.are_on_the_same_level(ctrl, trg):
-            abs_dom_1.disentangle(trg)
-            abs_dom_1.set_value(trg, L.Z)
+    elif abs_dom_1.are_on_the_same_level(ctrl, trg):
+        abs_dom_1.disentangle(trg)
+        abs_dom_1.set_value(trg, L.Z)
     else:
         abs_dom_1.dislevel(trg)
         abs_dom_1.entangle(ctrl, trg)
@@ -318,6 +319,13 @@ def abs_measure(abs_dom, var):
 
         abs_dom_1.disentangle(var)
         abs_dom_1.set_value(var, L.Z)
+
+    return abs_dom_1
+
+
+def abs_input(abs_dom, var):
+    abs_dom_1 = abs_dom.copy()
+    abs_dom_1.set_value(var, L.Top)
 
     return abs_dom_1
 
@@ -398,12 +406,6 @@ def lub_abs_dom(abs_dom1, abs_dom2):
     :type abs_dom1: AbsState
     :type abs_dom2: AbsState
     """
-    # if len(abs_dom1.partitions) == 0:
-    #     print('èèèèè')
-    #     return abs_dom2.copy()
-    # if len(abs_dom2.partitions) == 0:
-    #     print('èèèèè')
-    #     return abs_dom1.copy()
 
     # Intersect same level vars
     tuples1 = abs_dom1.partitions
@@ -484,7 +486,6 @@ def entanglement_analysis(all_vars, cfg):
     for v in all_vars:
         initial_state.add_z_var(str(v))
     abs_states[start_node] = initial_state
-    # print(initial_state)
 
     fixpoint = False
     # i = 0
@@ -500,18 +501,22 @@ def entanglement_analysis(all_vars, cfg):
                 """
                 :type label: EdgeLabel
                 """
-                # print(f'l: {label}')
                 pass
                 if label.type == NodeType.H:
                     temp_abs_states.append(abs_h(old_states[pred], label.value[0]))
                 elif label.type == NodeType.T:
                     temp_abs_states.append(abs_t(old_states[pred], label.value[0]))
+                elif label.type == NodeType.X:
+                    temp_abs_states.append(abs_x(old_states[pred], label.value[0]))
                 elif label.type == NodeType.CX:
                     temp_abs_states.append(abs_cx(old_states[pred], label.value[0], label.value[1]))
-                elif label.type == NodeType.NonZero or label.type == NodeType.Zero:
+                elif label.type == NodeType.NonZero or label.type == NodeType.Zero or label.type == NodeType.M:
                     temp_abs_states.append(abs_measure(old_states[pred], label.value[0]))
-                elif label.type == NodeType.Skip:
+                elif label.type == NodeType.In:
+                    temp_abs_states.append(abs_input(old_states[pred], label.value[0]))
+                elif label.type == NodeType.Skip or label.type == NodeType.Z:
                     temp_abs_states.append(old_states[pred])
+
 
             if len(temp_abs_states) > 0:
                 abs_states[node] = reduce(lambda x, y: lub_abs_dom(x, y), temp_abs_states)
@@ -519,18 +524,8 @@ def entanglement_analysis(all_vars, cfg):
                 abs_states[node] = initial_state
             else:
                 abs_states[node] = AbsState()
-        # print('§§§§§§§§§')
-        # print(i)
-        # print(old_states)
-        # print('--------')
-        # print(abs_states)
-        # print(old_states == abs_states)
+
         fixpoint = (old_states == abs_states)
-        # print('§§§§§§§§§')
-        # print()
-        # for node in cfg.nodes():
-        #     print(f'node: {node}')
-        #     print(f'part: {old_states[node].partitions == abs_states[node].partitions}')
-        #     print(f'lab: {old_states[node].labeling == abs_states[node].labeling}')
+
 
     return abs_states

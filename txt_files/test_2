@@ -1,6 +1,0 @@
-
-[c,a]
-skip
-while c:
-    h(a)
-cx(a,c)

@@ -1,0 +1,9 @@
+# using a temporary variable 'a' without uncomputation
+
+[x,y,a,r]
+h(x)
+x(y)
+cx(x,a)
+cx(y,a)
+cx(a,r)
+

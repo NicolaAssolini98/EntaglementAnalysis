@@ -1,0 +1,19 @@
+[a,b,c,d]
+# Example from 'Quantum Entanglement Analysis based on Abstract Interpretation', 2008, Simon Perdrix
+# we teleport a that is entangled with d
+h(a)
+cx(a,d)
+h(b)
+cx(b,c)
+cx(a,b)
+h(a)
+if b:
+    x(c)
+if a:
+    z(c)
+
+# at the end, a and d are entangled, as our analysis predict
+
+
+
+

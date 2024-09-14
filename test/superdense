@@ -1,0 +1,18 @@
+[x,y,a,b]
+# Super dense coding from Static Analysis of Quantum Programs via Gottesman Types, Robert Rand et al.
+
+# x and y are classical bit, here we represent it as measured qubits
+input(x)
+input(y)
+m(x)
+m(y)
+
+h(a)
+cx(a,b)
+if x:
+    z(a)
+if y:
+    x(a)
+cx(a,b)
+h(a)
+

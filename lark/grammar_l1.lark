@@ -3,20 +3,26 @@
 
 //expression:
     //statements
+    input_stmt: "input" "(" name ")" _NEWLINE
     h_stmt: "h" "(" name ")" _NEWLINE
     t_stmt: "t" "(" name ")" _NEWLINE
+    x_stmt: "x" "(" name ")" _NEWLINE
     cx_stmt: "cx" "(" name "," name ")" _NEWLINE
     pass_stmt: "skip" _NEWLINE
+    meas_stmt: "m" "(" name ")" _NEWLINE
+    z_stmt: "z" "(" name ")" _NEWLINE
 
     //control statements
     if_stmt: "if" name ":" body ["else" ":" body]//(elif)* [else]
-    else: "else" ":" body
+    //else: "else" ":" body
     while_stmt: "while" name ":" body //["else" ":" suite]
+    c_loop: "loop:" body
+    //c_if_stmt: "c_if" name ":" body ["else" ":" body]
 
 decl: "[" name ("," name)* "]" _NEWLINE
 ?stmt: simple_stmt | compound_stmt
-?simple_stmt: h_stmt | cx_stmt | t_stmt | pass_stmt
-?compound_stmt: if_stmt | while_stmt
+?simple_stmt: h_stmt | cx_stmt | t_stmt | pass_stmt | meas_stmt | z_stmt | x_stmt | input_stmt
+?compound_stmt: if_stmt | while_stmt | c_loop //c_if_stmt
 body: simple_stmt | _NEWLINE _INDENT stmt+ _DEDENT
 
 ?name: NAME

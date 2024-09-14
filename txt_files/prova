@@ -1,0 +1,10 @@
+# while loop example
+
+[a,b,c]
+h(b)
+cx(b,c)
+h(a)
+t(a)
+while a:
+    h(a)
+    cx(b,c)

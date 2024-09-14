@@ -1,0 +1,9 @@
+# Deutsch’s Algorithm from Static Analysis of Quantum Programs via Gottesman Types, Robert Rand et al.
+[a,b]
+x(b)
+h(a)
+h(b)
+cx(a,b)
+h(a)
+m(a)
+h(b)

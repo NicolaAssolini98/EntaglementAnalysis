@@ -1,0 +1,13 @@
+# using a temporary variable 'a' with uncomputation
+# in this case, since we don't have information about the loop, we have a lost of precision
+
+[x,y,a,r]
+h(x)
+x(y)
+loop:
+    cx(x,a)
+    cx(y,a)
+    cx(a,r)
+    cx(y,a)
+    cx(x,a)
+
